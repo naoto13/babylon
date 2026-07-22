@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Babylon.jsで制作するブラウザゲーム12案を、視点・操作・ゲームループ・実装要点まで比較できるコンセプトギャラリー"
+    />
+    <title>Babylon.js Game Concept Atlas</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #070a10;
+        --surface: rgba(19, 24, 34, 0.78);
+        --surface-solid: #121722;
+        --surface-strong: #1a2130;
+        --line: rgba(255, 255, 255, 0.1);
+        --line-strong: rgba(255, 255, 255, 0.18);
+        --text: #f6f7fb;
+        --muted: #9ea8b8;
+        --accent: #8ecbff;
+        --accent-strong: #c8e6ff;
+        --radius-lg: 1.5rem;
+        --radius-md: 1rem;
+        --shadow: 0 1.6rem 4rem rgba(0, 0, 0, 0.32);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 20rem;
+        background:
+          radial-gradient(circle at 10% -10%, rgba(60, 125, 186, 0.18), transparent 36rem),
+          radial-gradient(circle at 90% 6%, rgba(100, 72, 184, 0.12), transparent 34rem),
+          var(--bg);
+        color: var(--text);
+        font: 100%/1.6 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-optical-sizing: auto;
+        text-rendering: optimizeLegibility;
+      }
+
+      button,
+      a {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      img {
+        display: block;
+        max-width: 100%;
+      }
+
+      .shell {
+        width: min(100% - 2rem, 92rem);
+        margin-inline: auto;
+      }
+
+      .hero {
+        padding: clamp(4.5rem, 10vw, 9rem) 0 3.25rem;
+      }
+
+      .eyebrow {
+        margin: 0 0 1rem;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 760;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 14ch;
+        margin: 0;
+        font-size: clamp(2.8rem, 7vw, 6.7rem);
+        font-weight: 730;
+        letter-spacing: -0.055em;
+        line-height: 0.93;
+      }
+
+      .lede {
+        max-width: 42rem;
+        margin: 1.75rem 0 0;
+        color: #c3cad5;
+        font-size: clamp(1rem, 1.8vw, 1.28rem);
+        line-height: 1.7;
+      }
+
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem 2rem;
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .summary strong {
+        margin-right: 0.35rem;
+        color: var(--text);
+        font-size: 1.12rem;
+      }
+
+      .prototype-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-top: 1.4rem;
+      }
+
+      .prototype-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.85rem;
+        padding: 0.68rem 1rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.075);
+        color: var(--text);
+        font-size: 0.84rem;
+        font-weight: 720;
+        text-decoration: none;
+        transition: background 180ms ease, transform 100ms ease-out;
+      }
+
+      .prototype-link:hover {
+        background: rgba(255, 255, 255, 0.13);
+      }
+
+      .prototype-link:active {
+        transform: scale(0.97);
+      }
+
+      .controls-wrap {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        padding: 0.75rem 0;
+      }
+
+      .controls {
+        display: flex;
+        gap: 0.45rem;
+        overflow-x: auto;
+        padding: 0.42rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(12, 16, 24, 0.72);
+        box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(1.25rem) saturate(150%);
+        scrollbar-width: none;
+      }
+
+      .controls::-webkit-scrollbar {
+        display: none;
+      }
+
+      .filter {
+        flex: 0 0 auto;
+        min-height: 2.5rem;
+        padding: 0.58rem 1rem;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.86rem;
+        font-weight: 680;
+        transition: background 180ms ease, color 180ms ease, transform 100ms ease-out;
+      }
+
+      .filter:hover {
+        color: var(--text);
+      }
+
+      .filter:active {
+        transform: scale(0.97);
+      }
+
+      .filter[aria-pressed="true"] {
+        background: #f5f7fb;
+        color: #0b1018;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 3rem 0 1.4rem;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-size: clamp(1.7rem, 3vw, 2.5rem);
+        letter-spacing: -0.035em;
+        line-height: 1.1;
+      }
+
+      .section-heading p {
+        max-width: 30rem;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+        text-align: right;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 1.2rem;
+        padding-bottom: 7rem;
+      }
+
+      .card {
+        grid-column: span 6;
+        overflow: clip;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(145deg, rgba(26, 32, 45, 0.88), rgba(13, 17, 25, 0.92));
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+        transition: transform 300ms cubic-bezier(0.2, 0.75, 0.3, 1), border-color 220ms ease, box-shadow 300ms ease;
+      }
+
+      .card:hover {
+        transform: translateY(-0.25rem);
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow);
+      }
+
+      .card[hidden] {
+        display: none;
+      }
+
+      .image-button {
+        position: relative;
+        display: block;
+        width: 100%;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        background: #0c111b;
+        cursor: zoom-in;
+        text-align: left;
+      }
+
+      .image-button::after {
+        position: absolute;
+        right: 1rem;
+        bottom: 1rem;
+        padding: 0.42rem 0.72rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        background: rgba(5, 8, 13, 0.58);
+        color: #fff;
+        content: "拡大";
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        opacity: 0;
+        backdrop-filter: blur(0.7rem);
+        transform: translateY(0.35rem);
+        transition: opacity 180ms ease, transform 220ms ease;
+      }
+
+      .image-button:hover::after,
+      .image-button:focus-visible::after {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .image-button:active img {
+        transform: scale(0.995);
+      }
+
+      .image-button img {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        transition: transform 160ms ease-out;
+      }
+
+      .card-body {
+        padding: clamp(1.2rem, 2.5vw, 1.8rem);
+      }
+
+      .meta-row,
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .category,
+      .tag {
+        border-radius: 999px;
+        font-size: 0.73rem;
+        font-weight: 720;
+        letter-spacing: 0.03em;
+      }
+
+      .category {
+        padding: 0.36rem 0.65rem;
+        background: color-mix(in srgb, var(--card-accent) 16%, transparent);
+        color: var(--card-accent);
+      }
+
+      .tag {
+        padding: 0.32rem 0.58rem;
+        border: 1px solid var(--line);
+        color: #c3cad5;
+      }
+
+      .card h3 {
+        margin: 1rem 0 0.45rem;
+        font-size: clamp(1.45rem, 2.5vw, 2.1rem);
+        letter-spacing: -0.035em;
+        line-height: 1.12;
+      }
+
+      .hook {
+        margin: 0;
+        color: #c2cad6;
+        font-size: 0.96rem;
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem 1.25rem;
+        margin: 1.55rem 0 0;
+      }
+
+      .facts div {
+        min-width: 0;
+      }
+
+      .facts dt {
+        margin-bottom: 0.25rem;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 760;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .facts dd {
+        margin: 0;
+        color: #eef1f6;
+        font-size: 0.88rem;
+        line-height: 1.55;
+      }
+
+      .loop {
+        margin: 1.4rem 0 0;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+      }
+
+      .loop-label {
+        display: block;
+        margin-bottom: 0.45rem;
+        color: var(--card-accent);
+        font-size: 0.7rem;
+        font-weight: 780;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .loop p {
+        margin: 0;
+        color: #d5dae3;
+        font-size: 0.88rem;
+      }
+
+      .details {
+        margin-top: 1.15rem;
+      }
+
+      .details summary {
+        width: fit-content;
+        color: var(--text);
+        cursor: pointer;
+        font-size: 0.84rem;
+        font-weight: 720;
+      }
+
+      .details-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .details-grid h4 {
+        margin: 0 0 0.35rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .details-grid p {
+        margin: 0;
+        color: #d6dbe4;
+        font-size: 0.83rem;
+      }
+
+      .empty {
+        display: none;
+        grid-column: 1 / -1;
+        padding: 4rem 1rem;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .empty.visible {
+        display: block;
+      }
+
+      dialog {
+        width: min(92vw, 92rem);
+        max-width: none;
+        padding: 0;
+        overflow: clip;
+        border: 1px solid var(--line-strong);
+        border-radius: 1.5rem;
+        background: var(--surface-solid);
+        color: var(--text);
+        box-shadow: 0 2rem 7rem rgba(0, 0, 0, 0.72);
+      }
+
+      dialog::backdrop {
+        background: rgba(2, 4, 8, 0.78);
+        backdrop-filter: blur(0.75rem);
+      }
+
+      .dialog-image {
+        width: 100%;
+        max-height: 78vh;
+        object-fit: contain;
+        background: #05070b;
+      }
+
+      .dialog-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.1rem;
+      }
+
+      .dialog-bar p {
+        margin: 0;
+        font-weight: 680;
+      }
+
+      .close {
+        min-width: 4.2rem;
+        min-height: 2.5rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+        cursor: pointer;
+        transition: background 160ms ease, transform 100ms ease-out;
+      }
+
+      .close:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .close:active {
+        transform: scale(0.96);
+      }
+
+      :focus-visible {
+        outline: 0.18rem solid var(--accent);
+        outline-offset: 0.2rem;
+      }
+
+      footer {
+        padding: 0 0 4rem;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      @media (max-width: 58rem) {
+        .card {
+          grid-column: 1 / -1;
+        }
+
+        .section-heading {
+          align-items: start;
+          flex-direction: column;
+        }
+
+        .section-heading p {
+          text-align: left;
+        }
+      }
+
+      @media (max-width: 38rem) {
+        .shell {
+          width: min(100% - 1rem, 92rem);
+        }
+
+        .hero {
+          padding-top: 4rem;
+        }
+
+        .facts,
+        .details-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .controls-wrap {
+          margin-inline: -0.25rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        .controls,
+        dialog::backdrop {
+          backdrop-filter: none;
+        }
+
+        .controls {
+          background: #0d1119;
+        }
+      }
+
+      @media (prefers-contrast: more) {
+        :root {
+          --line: rgba(255, 255, 255, 0.3);
+          --line-strong: rgba(255, 255, 255, 0.58);
+          --muted: #c5ccd7;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero shell">
+      <p class="eyebrow">Babylon.js Game Concept Atlas</p>
+      <h1>12のゲーム、12の視点。</h1>
+      <p class="lede">
+        同じ3Dブラウザゲームでも、カメラが変われば遊びは別物になる。4つのテーマから膨らませた12案を、実プレイ画面、操作、ループ、実装上の芯まで比較する。
+      </p>
+      <div class="summary" aria-label="企画概要">
+        <span><strong>12</strong>コンセプト</span>
+        <span><strong>4</strong>テーマ</span>
+        <span><strong>7</strong>カメラ方式</span>
+        <span><strong>1</strong>ブラウザ</span>
+      </div>
+      <nav class="prototype-links" aria-label="クリック型プロトタイプ">
+        <a class="prototype-link" href="chrono-arena/index.html">クロノ・アリーナを触る</a>
+        <a class="prototype-link" href="moonlit-potion-workshop/index.html">月夜のポーション工房を触る</a>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <div class="controls-wrap" aria-label="視点で絞り込む">
+        <div class="controls" role="group" aria-label="視点フィルター">
+          <button class="filter" type="button" data-filter="all" aria-pressed="true">すべて</button>
+          <button class="filter" type="button" data-filter="overhead" aria-pressed="false">見下ろし</button>
+          <button class="filter" type="button" data-filter="free" aria-pressed="false">自由回転</button>
+          <button class="filter" type="button" data-filter="first" aria-pressed="false">一人称</button>
+          <button class="filter" type="button" data-filter="third" aria-pressed="false">三人称</button>
+          <button class="filter" type="button" data-filter="side" aria-pressed="false">横スクロール</button>
+          <button class="filter" type="button" data-filter="strategy" aria-pressed="false">戦略画面</button>
+        </div>
+      </div>
+
+      <div class="section-heading">
+        <h2>ゲーム画面とプレイ設計</h2>
+        <p>画像を選ぶと全画面で確認できます。各カードの「実装まで深掘り」を開くと、Babylon.jsで作る際の要点も表示します。</p>
+      </div>
+
+      <section id="concept-grid" class="grid" aria-live="polite"></section>
+      <p id="empty-state" class="empty">この視点に該当するゲームはありません。</p>
+    </main>
+
+    <dialog id="image-dialog" aria-labelledby="dialog-title">
+      <img id="dialog-image" class="dialog-image" alt="" />
+      <div class="dialog-bar">
+        <p id="dialog-title"></p>
+        <button id="dialog-close" class="close" type="button">閉じる</button>
+      </div>
+    </dialog>
+
+    <footer class="shell">
+      <p>Concept screens generated for design exploration. Final gameplay visuals will depend on art direction, performance targets, and device support.</p>
+    </footer>
+
+    <script>
+      const concepts = [
+        {
+          id: "chrono-arena",
+          number: "01",
+          title: "クロノ・アリーナ",
+          category: "1分間ローグライト",
+          accent: "#68d7ff",
+          image: "assets/game-screens/web/01-chrono-arena.webp",
+          alt: "高角度の固定カメラで、円形闘技場の中央にいる主人公と周囲の敵群を見下ろすゲーム画面",
+          filters: ["overhead"],
+          tags: ["高角度3/4見下ろし", "固定カメラ", "PC・ゲームパッド"],
+          hook: "敵の密度と残り時間を一目で把握し、60秒の攻撃ビルドを組み上げる。",
+          viewpoint: "透視投影の高角度3/4見下ろし。円形アリーナ全体を固定表示し、必要時だけ軽く追従。",
+          input: "WASD移動＋照準、回避、能力3枠。通常攻撃は自動化して判断を移動と能力発動に集中。",
+          screen: "中央に自機、周囲に敵、上部に大きな秒数。危険予告は床面へ直接投影し、HUDより空間を見る設計。",
+          loop: "開始 → 敵を倒して即時強化 → 60秒時点でボス化 → 成果から能力を1つ継承 → 次のアリーナ。",
+          appeal: "短いのにビルドが完成する速度感。時間と引き換えに火力を得る能力で、毎秒の価値を変える。",
+          babylon: "Thin Instancesで敵群を描画し、床デカールで攻撃予告。固定カメラによりLODとカリングを最適化しやすい。",
+          mvp: "1アリーナ、敵3種、能力12種、ボス1体。最短で“繰り返したくなる60秒”を検証できる。",
+          risk: "敵数を増やすだけでは単調になる。移動で状況が変わる敵配置と、短時間で相乗効果が出る強化設計が必要。"
+        },
+        {
+          id: "one-minute-heist",
+          number: "02",
+          title: "ワンミニット・ハイスト",
+          category: "1分間ローグライト",
+          accent: "#9ab7ff",
+          image: "assets/game-screens/web/02-one-minute-heist.webp",
+          alt: "壁を切り取った博物館をアイソメトリック視点で見下ろし、警備員の視界を避ける潜入ゲーム画面",
+          filters: ["overhead", "strategy"],
+          tags: ["アイソメトリック", "部屋単位で固定", "キーボード・タッチ"],
+          hook: "60秒で盗めるだけ盗む。深く進むほど価値が上がり、戻る時間が消えていく。",
+          viewpoint: "正投影に近いアイソメトリック。部屋群を斜め上から固定し、階層移動時のみ滑らかに遷移。",
+          input: "クリックまたはWASDで移動、短押しで物陰へ吸着。ハッキングと盗む操作は同じ文脈ボタン。",
+          screen: "警備員の視界、カメラ、レーザー、入口、宝、出口を同時表示。経路の読みやすさを最優先。",
+          loop: "侵入 → 安全圏で経路観察 → 宝を選んで奪取 → 警戒上昇 → 撤退または欲張る → 換金と装備解放。",
+          appeal: "“あと一部屋”の欲が失敗を生む。前回の行動ゴーストを陽動に使い、失敗自体を攻略資源へ変える。",
+          babylon: "正投影カメラ、壁のフェード、Navigation Mesh、視界コーンの動的メッシュが中心。小規模な自動生成と相性が良い。",
+          mvp: "1フロア、警備員2種、罠3種、宝10種、ゴースト記録。まずリスクと帰還判断の面白さを測る。",
+          risk: "生成マップが理不尽だと60秒制がストレスになる。必ず複数の安全経路を保証する生成ルールが必要。"
+        },
+        {
+          id: "last-signal",
+          number: "03",
+          title: "ラスト・シグナル",
+          category: "1分間ローグライト",
+          accent: "#71e8ee",
+          image: "assets/game-screens/web/03-last-signal.webp",
+          alt: "小惑星の曲面上で通信塔を守りながら砲台を設置する、背後上方からの三人称ゲーム画面",
+          filters: ["third", "free"],
+          tags: ["三人称・高め", "自由回転＋追従", "PC・ゲームパッド"],
+          hook: "撃つ、採る、建てるを60秒で同時処理し、小惑星全周から来る敵を防ぐ。",
+          viewpoint: "プレイヤー背後の高め三人称。通信塔を軸に自由回転でき、移動中は進行方向へ穏やかに追従。",
+          input: "移動、射撃、回避、建設ホイール。設置中は時間を少し遅くして、アクションの勢いを止めない。",
+          screen: "曲面の地平線で敵の接近方向を予告。建設可能範囲は地面グリッド、通信塔の耐久は塔の光で表現。",
+          loop: "資源回収 → 迎撃しながら設備配置 → 60秒防衛 → 恒久モジュール選択 → より危険な小惑星へ。",
+          appeal: "自分の操作と自動設備が同じ戦場で噛み合う。前周回の防衛網が“遺産”として残る。",
+          babylon: "ArcRotate的な軌道カメラとキャラクター追従を合成。球面重力、建設スナップ、GPUパーティクルが技術的な見せ場。",
+          mvp: "小惑星1個、敵3種、建物4種、武器2種。球面移動と建設の操作感を先に証明する。",
+          risk: "球面重力とカメラが酔いやすい。水平基準を保つ補間と、回転速度を抑えた設定が不可欠。"
+        },
+        {
+          id: "potion-workshop",
+          number: "04",
+          title: "月夜のポーション工房",
+          category: "魔法工房シミュレーター",
+          accent: "#bf9dff",
+          image: "assets/game-screens/web/04-moonlit-potion-workshop.webp",
+          alt: "一人称視点で両手を使って乳鉢の発光植物をすり潰す、魔法の作業台ゲーム画面",
+          filters: ["first"],
+          tags: ["一人称作業台", "視点移動は限定", "マウス・タッチ"],
+          hook: "素材の量だけでなく、切り方、温度、順序、混ぜ方を手の操作で調合する。",
+          viewpoint: "作業台前に固定した一人称。首振りは左右30度程度に制限し、道具へ自然にフォーカス。",
+          input: "掴む、傾ける、回す、潰すをポインター操作へ統一。キーボードは道具切替と作業取消だけ。",
+          screen: "道具と素材そのものがUI。温度計や砂時計は机上に置き、注文内容も羊皮紙で提示する。",
+          loop: "客の症状を聞く → 素材を選ぶ → 物理調合 → 試薬で検査 → 納品 → 評判と設備を更新。",
+          appeal: "正解レシピより“予想外だが使える副作用”が物語を生む。失敗を捨てず、次の客へ提案できる。",
+          babylon: "Pointer Drag Behavior、物理ジョイント、液体シェーダー、ハイライトレイヤーを利用。対象物を少なく保てば高品質にしやすい。",
+          mvp: "作業台1台、道具5個、素材8個、注文12件。流体シミュレーションは避け、液面と色をシェーダーで表現。",
+          risk: "リアルな物理が必ずしも気持ちよい操作にならない。吸着、補助回転、やり直しで“扱いやすい嘘”を入れる。"
+        },
+        {
+          id: "rune-lab",
+          number: "05",
+          title: "ルーン機巧研究所",
+          category: "魔法工房シミュレーター",
+          accent: "#d59cff",
+          image: "assets/game-screens/web/05-rune-mechanism-lab.webp",
+          alt: "斜め上から見た円形実験台に複数のルーンを接続し、火球を標的へ飛ばすゲーム画面",
+          filters: ["overhead", "free", "strategy"],
+          tags: ["斜め俯瞰", "作業台を自由回転", "マウス・タッチ"],
+          hook: "魔法を拾うのではなく、検知・反復・方向・効果を接続して自分で発明する。",
+          viewpoint: "円形実験台を中心とする斜め俯瞰。360度回転と段階ズームで回路全体と個別ルーンを往復。",
+          input: "ルーンをドラッグ配置し、端子から端子へ線を引く。再生ボタンで即座に3D実験を開始。",
+          screen: "中央は回路、外周は実験レーン。選択中だけ小さな放射メニューを出し、常設パネルを減らす。",
+          loop: "依頼条件を読む → 回路を組む → 実行結果を観察 → 欠陥を修正 → 納品 → 新ルーンを研究。",
+          appeal: "少数の部品から意図しない連鎖が生まれる。効率だけでなく、美しさや安全性も評価対象になる。",
+          babylon: "Node Material的な発想をゲーム化。ノード接続は論理データ、発火は3Dエフェクトとして分離し、デバッグ可能にする。",
+          mvp: "基本ルーン8種、依頼15件、実験標的3種。自由制作より先に、制約付きパズルで組み合わせの面白さを確認。",
+          risk: "自由度が高すぎると何をすべきか分からない。例示、部分目標、エラー位置の可視化を段階的に出す。"
+        },
+        {
+          id: "cursed-relic",
+          number: "06",
+          title: "呪物修復師",
+          category: "魔法工房シミュレーター",
+          accent: "#ff8f9f",
+          image: "assets/game-screens/web/06-cursed-relic-restorer.webp",
+          alt: "中央の呪われたオルゴールを拡大し、周囲の修復道具を選んで鑑定するオブジェクト中心のゲーム画面",
+          filters: ["free"],
+          tags: ["物体中心の検査視点", "360度回転＋ズーム", "マウス・タッチ"],
+          hook: "傷を直す前に、どの傷が物理破損で、どれが呪いの出口なのかを見極める。",
+          viewpoint: "対象物を常に中央へ置く検査カメラ。ドラッグで360度回転、ホイールで細部までズーム。",
+          input: "回転、焦点合わせ、道具選択、短いストローク操作。強い処置は長押し中に危険度が上昇する。",
+          screen: "傷や反応を対象物へ直接マーキング。選択道具だけ右端へ出し、部屋は雰囲気と異変の予兆に使う。",
+          loop: "依頼品を受領 → 非接触検査 → 呪いの構造を推理 → 清掃・修復・封印 → 方針を依頼人へ返す。",
+          appeal: "完全浄化が常に正解ではない。危険を残せば価値は上がるが、後の依頼や街へ影響する。",
+          babylon: "高精細PBR、Picking、局所デカール、Post Processが中心。カメラ固定範囲が狭く、品質へ予算を集中できる。",
+          mvp: "呪物5個、道具6種、異常パターン8種。1個を深く作り、観察→仮説→処置が成立するか先に検証。",
+          risk: "正解が総当たりになると推理が消える。音、振動、光、温度など複数の一貫した証拠が必要。"
+        },
+        {
+          id: "pocket-planet",
+          number: "07",
+          title: "ポケット・プラネット配送社",
+          category: "惑星物流パズル",
+          accent: "#8fe58b",
+          image: "assets/game-screens/web/07-pocket-planet-delivery.webp",
+          alt: "小さな球形惑星を斜めから見て、鉱山から工場へ線路を敷く物流パズルのゲーム画面",
+          filters: ["free", "strategy"],
+          tags: ["ミニ惑星ビュー", "自由回転＋ズーム", "マウス・タッチ"],
+          hook: "平面の最短距離ではなく、球面を回して惑星の裏側まで含めた物流経路を探す。",
+          viewpoint: "惑星全体を掴んで回す自由軌道カメラ。近距離では地形編集、遠距離では物流全体を確認。",
+          input: "ドラッグで惑星回転、別操作で線路を描画。施設間を選ぶと候補経路とコストを即時比較。",
+          screen: "輸送量は車両の流れで見せる。渋滞や不足は経路自体の色と施設上の小アイコンで表現。",
+          loop: "配送目標を確認 → 施設をつなぐ → 実行して詰まりを観察 → 路線を組み替える → 星評価。",
+          appeal: "惑星を手の中で転がす感触と、裏側に見つけた短絡路の発見。1ステージを短く解ける。",
+          babylon: "ArcRotateCamera、球面上のスプライン、InstancedMesh車両、惑星裏面の選択処理が中心。",
+          mvp: "惑星6面、施設4種、道路と鉄道。都市シミュレーションを省き、球面経路パズルへ集中。",
+          risk: "裏側が見えず状況を忘れやすい。ミニ地球儀、経路の透過表示、問題地点へのワンタップ移動が必要。"
+        },
+        {
+          id: "orbital-chain",
+          number: "08",
+          title: "オービタル・チェイン",
+          category: "惑星物流パズル",
+          accent: "#72caff",
+          image: "assets/game-screens/web/08-orbital-chain.webp",
+          alt: "複数惑星の公転軌道を斜め上から見て、惑星間の輸送航路と到着窓を計画するゲーム画面",
+          filters: ["free", "strategy", "overhead"],
+          tags: ["宇宙全体の戦略俯瞰", "パン・回転・ズーム", "マウス中心"],
+          hook: "距離ではなく時間が地形になる。公転で変化する輸送窓をつないで供給網を維持する。",
+          viewpoint: "軌道面を斜め上から見るマクロ視点。パン、ズーム、軽い回転に対応し、惑星へ寄ると局所情報を展開。",
+          input: "惑星間をドラッグして便を作成。下部タイムラインを擦り、未来位置と到着時刻をプレビュー。",
+          screen: "惑星、軌道、輸送弧、到着可能窓が主役。詳細表は選択時のみ出し、常に時間の流れを見せる。",
+          loop: "需要予測 → 発射窓を選ぶ → 複数便を予約 → 時間進行 → 遅延に対応 → 航路網を拡張。",
+          appeal: "小さな遅延が遠い惑星の不足へ連鎖する。数手先の公転を読み切った時の納得感が強い。",
+          babylon: "軌道計算と描画時刻を分離。ラインメッシュ、GPU粒子、対数的ズーム、時間スクラブの補間精度が要点。",
+          mvp: "恒星1、惑星3、資源3、契約10件。リアル天体物理より、読みやすい周期パズルを優先する。",
+          risk: "待ち時間がプレイを止めやすい。時間加速だけでなく、未来を編集してから一括実行できる計画フェーズが必要。"
+        },
+        {
+          id: "living-planet",
+          number: "09",
+          title: "生きている惑星",
+          category: "惑星物流パズル",
+          accent: "#a9df67",
+          image: "assets/game-screens/web/09-living-planet.webp",
+          alt: "森林、河川、都市、工場がある広い地形を高い斜め視点で見て、生態系を避ける道路ルートを比較するゲーム画面",
+          filters: ["overhead", "free", "strategy"],
+          tags: ["高角度の地形俯瞰", "回転＋ズーム", "マウス中心"],
+          hook: "最速の道路が最良とは限らない。水系、動物、森林の連鎖を読み、長期的な物流を設計する。",
+          viewpoint: "連続した地域を高角度で見る3D地形カメラ。回転とズームは自由だが、俯角を保って地形判読を優先。",
+          input: "道路を描き、建設前に時間を進めて影響予測。環境レイヤーは必要なものだけ重ねる。",
+          screen: "自然と産業の境界が画面中心。生態系は別グラフではなく、地形上の移動、色、流量として見せる。",
+          loop: "需要を満たす案を描く → 生態影響を予測 → 建設 → 数季節観察 → 補修または撤去 → 次の需要。",
+          appeal: "効率と保全に唯一の正解がない。自分が作った物流網が、数年後の地形や生物相へ記録される。",
+          babylon: "地形LOD、薄い植生インスタンス、流域テクスチャ、経路探索を組み合わせる。シミュレーション更新頻度を描画と分離。",
+          mvp: "1流域、資源2種、動物1種、季節4段階。生態系は少数の因果関係から始め、観察可能性を優先。",
+          risk: "結果が遅く出ると因果が分からない。建設前予測と、結果から原因へ戻れる履歴表示が重要。"
+        },
+        {
+          id: "abyss-photographer",
+          number: "10",
+          title: "アビス・フォトグラファー",
+          category: "深海探索ゲーム",
+          accent: "#7ee9ff",
+          image: "assets/game-screens/web/10-abyss-photographer.webp",
+          alt: "一人称の水中カメラ越しに、発光する巨大生物を深海で撮影するゲーム画面",
+          filters: ["first", "free"],
+          tags: ["一人称・自由遊泳", "6方向移動", "PC・ゲームパッド"],
+          hook: "近づけば良い写真になるが、生物を驚かせたり、暗闇の捕食者に見つかったりする。",
+          viewpoint: "ダイバーの一人称。上下を含む6方向移動と自由視点だが、ロールは抑えて酔いを軽減。",
+          input: "泳ぐ、ライト調整、ズーム、フォーカス、撮影。呼吸を止めると短時間だけ手ブレが減る。",
+          screen: "ファインダーを中心に、酸素と光量だけ周辺表示。生物名は撮影後に判明し、探索中の未知を守る。",
+          loop: "痕跡を追う → 光と音で接近 → 行動を観察 → 決定的瞬間を撮る → 酸素内で帰還 → 図鑑更新。",
+          appeal: "倒すのではなく理解することで上達する。希少行動を自分で誘発し、最高の一枚を狙う。",
+          babylon: "Volumetric Light、Fog、GPU Particles、アニメーション状態判定が中心。生物AIは刺激への反応表で組む。",
+          mvp: "1海域、生物6種、カメラ強化3段階、写真評価4軸。まず追跡と撮影の緊張感を作る。",
+          risk: "暗さが美しさより不便さになる可能性。音、微光、粒子の流れで探索可能な手掛かりを常に残す。"
+        },
+        {
+          id: "wreck-salvage",
+          number: "11",
+          title: "沈没船サルベージ",
+          category: "深海探索ゲーム",
+          accent: "#83c9d0",
+          image: "assets/game-screens/web/11-wreck-salvage.webp",
+          alt: "三人称のダイバーが沈没船を切断し、ワイヤーと浮力袋で重い積荷を持ち上げるゲーム画面",
+          filters: ["third", "free"],
+          tags: ["三人称・肩越し", "自由遊泳＋追従", "PC・ゲームパッド"],
+          hook: "切る位置、ワイヤーの長さ、浮力の偏りで、同じ積荷でも回収方法が変わる。",
+          viewpoint: "ダイバー背後の肩越し三人称。狭所では自動で寄り、外では引いてワイヤー全体を見せる。",
+          input: "自由遊泳、工具使用、固定点指定、ワイヤー巻上げ。重い物体の慣性をスティックやマウスで制御。",
+          screen: "ダイバー、積荷、固定点、浮力袋を一画面に収める。張力はワイヤー色と振動で伝える。",
+          loop: "ソナー調査 → 侵入口を作る → 価値と危険を査定 → 固定・切断・浮上 → 船へ積載 → 装備更新。",
+          appeal: "正しい手順を自分で組み立て、巨大物が静かに動き出す物理的満足。欲張るほど帰還が難しくなる。",
+          babylon: "Havok物理、ロープ近似、浮力、局所破壊表現が核。完全破壊より、決められた切断点で安定性を確保する。",
+          mvp: "沈没船1隻、積荷8個、工具4種、回収依頼10件。ロープと浮力の面白さを最優先で検証。",
+          risk: "物理の暴走とカメラ衝突が大きな開発リスク。重量上限、補助姿勢制御、巻き戻しをゲーム仕様として持つ。"
+        },
+        {
+          id: "echo-diver",
+          number: "12",
+          title: "エコー・ダイバー",
+          category: "深海探索ゲーム",
+          accent: "#64e3ff",
+          image: "assets/game-screens/web/12-echo-diver.webp",
+          alt: "真横からの2.5D視点で、暗い海底洞窟を進むダイバーのソナー波が遺跡を照らすゲーム画面",
+          filters: ["side"],
+          tags: ["2.5D横スクロール", "固定サイドカメラ", "全デバイス"],
+          hook: "見たいなら音を出す必要がある。しかし、その音は暗闇の何かにも届く。",
+          viewpoint: "固定の真横カメラ。移動は左右上下が中心で、前後は回避用の浅いレーンだけ許可する2.5D。",
+          input: "泳ぐ、弱・強ソナー、ライト、息を潜める。強いソナーほど遠くを描くが敵の追跡精度も上がる。",
+          screen: "通常はほぼ暗闇。発した波が触れた3D表面だけ数秒残像化し、プレイヤーが頭の中で地図をつなぐ。",
+          loop: "弱い反響を探す → パルスで地形確認 → 音を抑えて移動 → 遺物を回収 → 追跡を切る → 拠点へ帰る。",
+          appeal: "情報取得そのものがリスクになる明快な緊張。横スクロールなので操作負荷が低く、雰囲気へ集中できる。",
+          babylon: "3D洞窟をサイド表示し、深度と法線を使ったソナーPost Processで一時描画。視点固定でWeb性能も読みやすい。",
+          mvp: "洞窟1本、敵2種、ソナー2段階、遺物6個。暗闇でも進める情報量と恐怖の釣り合いを検証する。",
+          risk: "暗すぎると単なる待ちゲームになる。弱い受動反響を常時残し、完全な無情報状態を作らない。"
+        }
+      ];
+
+      const grid = document.querySelector("#concept-grid");
+      const emptyState = document.querySelector("#empty-state");
+      const dialog = document.querySelector("#image-dialog");
+      const dialogImage = document.querySelector("#dialog-image");
+      const dialogTitle = document.querySelector("#dialog-title");
+      const dialogClose = document.querySelector("#dialog-close");
+
+      const conceptMarkup = (concept) => `
+        <article class="card" data-filters="${concept.filters.join(" ")}" style="--card-accent:${concept.accent}">
+          <button class="image-button" type="button" data-dialog-id="${concept.id}" aria-label="${concept.title}のゲーム画面を拡大">
+            <img src="${concept.image}" alt="${concept.alt}" loading="lazy" width="1672" height="941" />
+          </button>
+          <div class="card-body">
+            <div class="meta-row">
+              <span class="category">${concept.category}</span>
+              <span class="tag">${concept.number}</span>
+            </div>
+            <h3>${concept.title}</h3>
+            <p class="hook">${concept.hook}</p>
+            <div class="tag-row" aria-label="視点と操作" style="margin-top:1rem">
+              ${concept.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}
+            </div>
+            <dl class="facts">
+              <div><dt>カメラ視点</dt><dd>${concept.viewpoint}</dd></div>
+              <div><dt>主操作</dt><dd>${concept.input}</dd></div>
+              <div><dt>画面設計</dt><dd>${concept.screen}</dd></div>
+              <div><dt>面白さの核</dt><dd>${concept.appeal}</dd></div>
+            </dl>
+            <div class="loop">
+              <span class="loop-label">Core loop</span>
+              <p>${concept.loop}</p>
+            </div>
+            <details class="details">
+              <summary>実装まで深掘り</summary>
+              <div class="details-grid">
+                <div><h4>Babylon.jsの要点</h4><p>${concept.babylon}</p></div>
+                <div><h4>MVPの切り方</h4><p>${concept.mvp}</p></div>
+                <div style="grid-column:1/-1"><h4>主なリスク</h4><p>${concept.risk}</p></div>
+              </div>
+            </details>
+          </div>
+        </article>
+      `;
+
+      grid.innerHTML = concepts.map(conceptMarkup).join("");
+
+      const setFilter = (filter) => {
+        let visible = 0;
+        document.querySelectorAll(".filter").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.filter === filter));
+        });
+
+        document.querySelectorAll(".card").forEach((card) => {
+          const matches = filter === "all" || card.dataset.filters.split(" ").includes(filter);
+          card.hidden = !matches;
+          if (matches) visible += 1;
+        });
+
+        emptyState.classList.toggle("visible", visible === 0);
+      };
+
+      document.querySelector(".controls").addEventListener("click", (event) => {
+        const button = event.target.closest(".filter");
+        if (!button) return;
+        setFilter(button.dataset.filter);
+      });
+
+      grid.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-dialog-id]");
+        if (!button) return;
+        const concept = concepts.find((item) => item.id === button.dataset.dialogId);
+        if (!concept) return;
+
+        dialogImage.src = concept.image;
+        dialogImage.alt = concept.alt;
+        dialogTitle.textContent = `${concept.number} — ${concept.title}`;
+        dialog.showModal();
+      });
+
+      const closeDialog = () => dialog.close();
+      dialogClose.addEventListener("click", closeDialog);
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) closeDialog();
+      });
+    </script>
+  </body>
+</html>
