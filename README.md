@@ -27,3 +27,10 @@ python3 -m http.server 4173
 - `chrono-arena/SPEC.md`: クロノ・アリーナのMVP仕様
 - `moonlit-potion-workshop/index.html`: 注文、素材選択、温度・加工、鑑定結果
 - `moonlit-potion-workshop/SPEC.md`: 月夜のポーション工房のMVP仕様
+
+## Babylon.js 実装版
+
+- `moonlit-potion-workshop/game/index.html`: 月夜のポーション工房の3D実装（MVP）。素材ドラッグ投入、まな板・乳鉢の前処理ジェスチャー、火加減ダイヤル、円ドラッグかき混ぜ、鑑定・納品・後日談、3夜12注文、保留棚、図鑑、ローカルセーブ
+- 技巧システム: かき混ぜの真円度、注ぎ量ゲージの止めどころ、煮込みの秒数ぴったり停止など、プレイヤーの手の巧拙が効力・安定度・副作用へ反映される（設定「判定をやさしく」あり）
+- 起動: 上記の `python3 -m http.server 4173` 後、`http://127.0.0.1:4173/moonlit-potion-workshop/game/` を開く
+- ロジックの単体テスト: `node --test moonlit-potion-workshop/game/test/`

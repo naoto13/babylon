@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#081124">
+    <title>月夜のポーション工房</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <canvas id="workshop-canvas" aria-label="月夜のポーション工房の作業台"></canvas>
+    <div id="ui-root"></div>
+    <p id="boot-error" role="alert"></p>
+    <script src="https://cdn.babylonjs.com/babylon.js" onerror="window.__babylonLoadFailed=true;document.getElementById('boot-error').textContent='3D表示ライブラリを読み込めませんでした。通信を確認して再読み込みしてください。';document.getElementById('boot-error').classList.add('visible');"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js" onerror="window.__babylonLoaderLoadFailed=true;"></script>
+    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js" onerror="window.__babylonMaterialsLoadFailed=true;"></script>
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>
