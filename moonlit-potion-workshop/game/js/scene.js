@@ -97,9 +97,9 @@ const HERO_ASSETS = Object.freeze({
 const DRESSING_ASSETS = Object.freeze({
   books: Object.freeze({
     path: "assets/models/dress-books.glb",
-    position: Object.freeze({ x: -3.95, y: 0.75, z: 3.45 }),
+    position: Object.freeze({ x: -4.25, y: 0.81, z: 3.45 }),
     rotationY: -0.18,
-    size: Object.freeze({ height: 0.35, diameter: 0.65 }),
+    size: Object.freeze({ height: 0.917, diameter: 1.716 }),
     family: "leather",
   }),
   plant: Object.freeze({
@@ -121,30 +121,30 @@ const DRESSING_ASSETS = Object.freeze({
   }),
   hourglass: Object.freeze({
     path: "assets/models/dress-hourglass.glb",
-    position: Object.freeze({ x: 3.1, y: 0.8, z: 2.85 }),
+    position: Object.freeze({ x: 3.1, y: 0.88, z: 2.85 }),
     rotationY: 0.36,
-    size: Object.freeze({ height: 0.45, diameter: 0.46 }),
+    size: Object.freeze({ height: 0.915, diameter: 0.93 }),
     family: "wood",
   }),
   crate: Object.freeze({
     path: "assets/models/dress-crate.glb",
-    position: Object.freeze({ x: -4.25, y: 0.825, z: 2.35 }),
+    position: Object.freeze({ x: -4.25, y: 0.915, z: 2.35 }),
     rotationY: 0.32,
-    size: Object.freeze({ height: 0.5, diameter: 0.8 }),
+    size: Object.freeze({ height: 1.02, diameter: 1.62 }),
     family: "wood",
   }),
   bottles: Object.freeze({
     path: "assets/models/dress-bottles.glb",
-    position: Object.freeze({ x: -1.4, y: 0.75, z: 3.38 }),
+    position: Object.freeze({ x: -1.4, y: 0.82, z: 3.38 }),
     rotationY: 0.12,
-    size: Object.freeze({ height: 0.35, diameter: 0.7 }),
+    size: Object.freeze({ height: 0.735, diameter: 1.47 }),
     family: "glass",
   }),
   scroll: Object.freeze({
     path: "assets/models/dress-scroll.glb",
-    position: Object.freeze({ x: 4.1, y: 0.7, z: 1.52 }),
+    position: Object.freeze({ x: 4.1, y: 0.75, z: 1.52 }),
     rotationY: -0.28,
-    size: Object.freeze({ height: 0.25, diameter: 0.7 }),
+    size: Object.freeze({ height: 0.525, diameter: 1.47 }),
     family: "parchment",
   }),
   lantern: Object.freeze({
@@ -163,52 +163,125 @@ const DRESSING_ASSETS = Object.freeze({
   }),
   moonOrb: Object.freeze({
     path: "assets/models/dress-moon-orb.glb",
-    position: Object.freeze({ x: -0.38, y: 0.725, z: 3.52 }),
+    position: Object.freeze({ x: -1.0, y: 0.785, z: 1.8 }),
     rotationY: 0,
-    size: Object.freeze({ height: 0.3, diameter: 0.34 }),
+    size: Object.freeze({ height: 0.851, diameter: 0.972 }),
     family: "moonOrb",
     flags: Object.freeze({ includeGlow: true }),
   }),
   compartmentBox: Object.freeze({
     path: "assets/models/dress-compartment-box.glb",
-    position: Object.freeze({ x: -1.1, y: 0.715, z: 2.2 }),
-    rotationY: -0.14,
-    size: Object.freeze({ height: 0.28, diameter: 1.3 }),
+    position: Object.freeze({ x: -2.45, y: 0.755, z: 1.35 }),
+    rotationY: 0.32,
+    size: Object.freeze({ height: 0.81, diameter: 3.803 }),
     family: "plain",
   }),
   petalBowl: Object.freeze({
     path: "assets/models/dress-petal-bowl.glb",
-    position: Object.freeze({ x: -1.7, y: 0.69, z: 0.4 }), // 実機調整: 前列は画面外に沈むため可視帯へ
-    rotationY: 0.18,
-    size: Object.freeze({ height: 0.23, diameter: 0.55 }),
+    position: Object.freeze({ x: -3.05, y: 0.73, z: -0.4 }),
+    rotationY: 0.1,
+    size: Object.freeze({ height: 0.791, diameter: 1.887 }),
     family: "plain",
   }),
   crystalBowl: Object.freeze({
     path: "assets/models/dress-crystal-bowl.glb",
-    position: Object.freeze({ x: 1.6, y: 0.69, z: 1.8 }), // 実機調整: UIパネル裏から可視帯へ
-    rotationY: -0.16,
-    size: Object.freeze({ height: 0.23, diameter: 0.5 }),
+    position: Object.freeze({ x: 2.8, y: 0.73, z: -0.35 }),
+    rotationY: -0.15,
+    size: Object.freeze({ height: 0.791, diameter: 1.734 }),
     family: "plain",
   }),
   spellbook: Object.freeze({
     path: "assets/models/dress-spellbook.glb",
-    position: Object.freeze({ x: -3.35, y: 0.665, z: 0.1 }), // 実機調整
-    rotationY: 0,
-    size: Object.freeze({ height: 0.18, diameter: 0.9 }),
+    position: Object.freeze({ x: -4.35, y: 0.76, z: -0.15 }),
+    rotationY: 0.15,
+    size: Object.freeze({ height: 0.545, diameter: 2.741 }),
     family: "plain",
   }),
   scale: Object.freeze({
     path: "assets/models/dress-scale.glb",
-    position: Object.freeze({ x: 2.55, y: 0.875, z: 2.25 }),
-    rotationY: 0.2,
-    size: Object.freeze({ height: 0.6, diameter: 0.65 }),
+    position: Object.freeze({ x: 2.1, y: 0.965, z: 2.85 }),
+    rotationY: -0.25,
+    size: Object.freeze({ height: 1.521, diameter: 1.658 }),
     family: "plain",
   }),
   herbBundle: Object.freeze({
     path: "assets/models/dress-herb-bundle.glb",
-    position: Object.freeze({ x: -2.4, y: 0.665, z: 0.9 }), // 実機調整: 釜ドロップ圏外の可視帯へ
-    rotationY: -0.36,
-    size: Object.freeze({ height: 0.18, diameter: 0.8 }),
+    position: Object.freeze({ x: -1.35, y: 0.695, z: 1 }),
+    rotationY: -0.5,
+    size: Object.freeze({ height: 0.522, diameter: 2.349 }),
+    family: "plain",
+  }),
+  alembic: Object.freeze({
+    path: "assets/models/dress-alembic.glb",
+    position: Object.freeze({ x: -2.75, y: 0.925, z: 2.95 }),
+    rotationY: 0.2,
+    size: Object.freeze({ height: 1.418, diameter: 1.255 }),
+    family: "glass",
+  }),
+  inkwell: Object.freeze({
+    path: "assets/models/dress-inkwell.glb",
+    position: Object.freeze({ x: -3.7, y: 0.7, z: -0.85 }),
+    rotationY: -0.3,
+    size: Object.freeze({ height: 0.563, diameter: 0.788 }),
+    family: "plain",
+  }),
+  candelabra: Object.freeze({
+    path: "assets/models/dress-candelabra.glb",
+    position: Object.freeze({ x: -3.65, y: 0.925, z: 2.7 }),
+    rotationY: -0.1,
+    size: Object.freeze({ height: 1.418, diameter: 1.215 }),
+    family: "brass",
+  }),
+  mushroomBasket: Object.freeze({
+    path: "assets/models/dress-mushroom-basket.glb",
+    position: Object.freeze({ x: 1.3, y: 0.75, z: -0.6 }),
+    rotationY: 0.2,
+    size: Object.freeze({ height: 0.867, diameter: 1.238 }),
+    family: "wood",
+  }),
+  starchart: Object.freeze({
+    path: "assets/models/dress-starchart.glb",
+    position: Object.freeze({ x: 1.95, y: 0.605, z: -0.15 }),
+    rotationY: 0.35,
+    fit: "flat",
+    size: Object.freeze({ height: 0.14, diameter: 2.558 }),
+    family: "parchment",
+  }),
+  flask: Object.freeze({
+    path: "assets/models/dress-flask.glb",
+    position: Object.freeze({ x: -1.95, y: 0.825, z: 2.6 }),
+    rotationY: -0.28,
+    size: Object.freeze({ height: 1.05, diameter: 1.05 }),
+    family: "glass",
+  }),
+  censer: Object.freeze({
+    path: "assets/models/dress-censer.glb",
+    position: Object.freeze({ x: 1.5, y: 0.775, z: 2.15 }),
+    rotationY: 0.4,
+    size: Object.freeze({ height: 0.84, diameter: 0.84 }),
+    family: "brass",
+  }),
+  keys: Object.freeze({
+    path: "assets/models/dress-keys.glb",
+    position: Object.freeze({ x: 3.5, y: 0.6, z: -0.05 }),
+    rotationY: 0.6,
+    fit: "flat",
+    size: Object.freeze({ height: 0.12, diameter: 0.96 }),
+    family: "brass",
+  }),
+  teapot: Object.freeze({
+    path: "assets/models/dress-teapot.glb",
+    position: Object.freeze({ x: 3.6, y: 0.8, z: 2.7 }),
+    rotationY: -0.3,
+    size: Object.freeze({ height: 0.912, diameter: 1.317 }),
+    family: "ceramic",
+  }),
+  herbPlate: Object.freeze({
+    path: "assets/models/dress-herb-plate.glb",
+    position: Object.freeze({ x: -1.5, y: 0.615, z: -0.7 }),
+    rotationY: -0.2,
+    fit: "flat",
+    size: Object.freeze({ height: 0.204, diameter: 1.275 }),
     family: "plain",
   }),
 });
@@ -950,13 +1023,23 @@ async function loadDressingProp(name, config, context) {
     const bounds = importedBounds(meshes);
     const rawScale = Math.min(config.size.diameter / bounds.diameter, config.size.height / bounds.height);
     const scale = BABYLON.Scalar.Clamp(rawScale, HERO_SCALE_LIMITS.min, HERO_SCALE_LIMITS.max);
+    const horizontalScale = config.fit === "flat"
+      ? BABYLON.Scalar.Clamp(config.size.diameter / bounds.diameter, HERO_SCALE_LIMITS.min, HERO_SCALE_LIMITS.max)
+      : scale;
+    const verticalScale = config.fit === "flat"
+      ? BABYLON.Scalar.Clamp(config.size.height / bounds.height, HERO_SCALE_LIMITS.min, HERO_SCALE_LIMITS.max)
+      : scale;
     const anchor = new BABYLON.TransformNode(`${name}-dressing-anchor`, scene);
     placeDressingAnchor(anchor, dressingPlacements(config)[0]);
     anchors.push(anchor);
     const modelRoot = new BABYLON.TransformNode(`${name}-dressing-model`, scene);
     modelRoot.parent = anchor;
-    modelRoot.scaling.setAll(scale);
-    modelRoot.position.copyFrom(bounds.centre.scale(-scale));
+    modelRoot.scaling.set(horizontalScale, verticalScale, horizontalScale);
+    modelRoot.position.set(
+      -bounds.centre.x * horizontalScale,
+      -bounds.centre.y * verticalScale,
+      -bounds.centre.z * horizontalScale,
+    );
     for (const root of importedRoots(meshes)) root.parent = modelRoot;
     for (const mesh of meshes) mesh.isPickable = false;
     applyHeroMaterial(meshes, config.family, scene);
