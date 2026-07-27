@@ -23,8 +23,9 @@ python3 tools/serve.py 4173  # no-cache ヘッダー付き（JS/アセット差�
 
 ## クリック型プロトタイプ
 
-- `chrono-arena/index.html`: 60秒戦闘、時間停止アップグレード、結果画面
-- `chrono-arena/SPEC.md`: クロノ・アリーナのMVP仕様
+- `chrono-arena/`: Babylon.jsで動作するクロノ・アリーナのプレイアブルMVP
+- `chrono-arena/README.md`: pnpmでの起動方法と操作
+- `chrono-arena/SPEC.md`: クロノ・アリーナの実装状況とMVP仕様
 - `moonlit-potion-workshop/index.html`: 注文、素材選択、温度・加工、鑑定結果
 - `moonlit-potion-workshop/SPEC.md`: 月夜のポーション工房のMVP仕様
 
@@ -34,3 +35,11 @@ python3 tools/serve.py 4173  # no-cache ヘッダー付き（JS/アセット差�
 - 技巧システム: かき混ぜの真円度、注ぎ量ゲージの止めどころ、煮込みの秒数ぴったり停止など、プレイヤーの手の巧拙が効力・安定度・副作用へ反映される（設定「判定をやさしく」あり）
 - 起動: 上記の `python3 tools/serve.py 4173` 後、`http://127.0.0.1:4173/moonlit-potion-workshop/game/` を開く（配置編集は末尾に `?layout=1`）
 - ロジックの単体テスト: `node --test moonlit-potion-workshop/game/test/`
+
+クロノ・アリーナのプレイ版はBabylon.jsをバンドルするため、次のコマンドで起動します。
+
+```bash
+cd chrono-arena
+pnpm install
+pnpm dev
+```

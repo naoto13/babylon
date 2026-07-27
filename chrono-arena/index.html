@@ -3,933 +3,199 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="クロノ・アリーナのクリック型ゲームコンセプトプロトタイプ" />
-    <title>Chrono Arena — Concept Prototype</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        --ink: #f7f8fb;
-        --muted: #a7b3c5;
-        --cyan: #62dcff;
-        --violet: #b487ff;
-        --gold: #f7cf76;
-        --danger: #ff6a77;
-        --glass: rgba(8, 14, 24, 0.72);
-        --solid: #0b111c;
-        --line: rgba(255, 255, 255, 0.14);
-        --shadow: 0 1.8rem 5rem rgba(0, 0, 0, 0.45);
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html,
-      body {
-        min-width: 20rem;
-        min-height: 100%;
-      }
-
-      body {
-        margin: 0;
-        overflow-x: hidden;
-        background: #04070d;
-        color: var(--ink);
-        font: 100%/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-optical-sizing: auto;
-      }
-
-      button,
-      a,
-      input {
-        font: inherit;
-      }
-
-      button,
-      a {
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      button {
-        color: inherit;
-      }
-
-      .game-shell {
-        position: relative;
-        min-height: 100svh;
-        isolation: isolate;
-      }
-
-      .scene {
-        position: absolute;
-        inset: 0;
-        min-height: 100svh;
-        overflow-x: hidden;
-        overflow-y: auto;
-        opacity: 0;
-        pointer-events: none;
-        transform: scale(1.015);
-        transition: opacity 260ms ease, transform 420ms cubic-bezier(0.2, 0.75, 0.28, 1);
-      }
-
-      .scene[aria-hidden="false"] {
-        z-index: 1;
-        opacity: 1;
-        pointer-events: auto;
-        transform: scale(1);
-      }
-
-      .scene-bg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      .scene::after {
-        position: absolute;
-        inset: 0;
-        background:
-          linear-gradient(90deg, rgba(3, 7, 13, 0.86) 0%, rgba(3, 7, 13, 0.28) 45%, rgba(3, 7, 13, 0.4) 100%),
-          linear-gradient(0deg, rgba(3, 7, 13, 0.76), transparent 42%);
-        content: "";
-        pointer-events: none;
-      }
-
-      .scene.gameplay::after {
-        background: linear-gradient(0deg, rgba(2, 5, 10, 0.62), transparent 34%, rgba(2, 5, 10, 0.18));
-      }
-
-      .chrome {
-        position: fixed;
-        z-index: 30;
-        top: 0;
-        right: 0;
-        left: 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 1rem clamp(1rem, 3vw, 2.2rem);
-        background: linear-gradient(rgba(3, 7, 13, 0.78), transparent);
-        pointer-events: none;
-      }
-
-      .chrome > * {
-        pointer-events: auto;
-      }
-
-      .back,
-      .ghost-button,
-      .primary,
-      .secondary,
-      .choice {
-        border: 1px solid var(--line);
-        cursor: pointer;
-        transition: background 180ms ease, border-color 180ms ease, transform 100ms ease-out;
-      }
-
-      .back,
-      .ghost-button {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.65rem;
-        padding: 0.65rem 1rem;
-        border-radius: 999px;
-        background: rgba(5, 10, 18, 0.58);
-        color: #dce7f4;
-        text-decoration: none;
-        backdrop-filter: blur(1rem) saturate(150%);
-      }
-
-      .back:hover,
-      .ghost-button:hover,
-      .secondary:hover {
-        background: rgba(255, 255, 255, 0.11);
-        border-color: rgba(255, 255, 255, 0.25);
-      }
-
-      .back:active,
-      .ghost-button:active,
-      .primary:active,
-      .secondary:active,
-      .choice:active {
-        transform: scale(0.97);
-      }
-
-      .prototype-label {
-        color: var(--muted);
-        font-size: 0.76rem;
-        font-weight: 760;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-      }
-
-      .start-content {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: flex-end;
-        min-height: 100svh;
-        padding: clamp(6.5rem, 12vw, 9rem) clamp(1rem, 7vw, 7rem) clamp(3rem, 8vw, 6rem);
-      }
-
-      .start-copy {
-        width: min(43rem, 100%);
-      }
-
-      .kicker {
-        margin: 0 0 0.9rem;
-        color: var(--cyan);
-        font-size: 0.76rem;
-        font-weight: 780;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      h1,
-      h2,
-      h3,
-      p {
-        overflow-wrap: anywhere;
-      }
-
-      h1 {
-        max-width: 11ch;
-        margin: 0;
-        font-size: clamp(3.2rem, 9vw, 7.4rem);
-        font-weight: 760;
-        letter-spacing: -0.065em;
-        line-height: 0.88;
-      }
-
-      .subtitle {
-        max-width: 36rem;
-        margin: 1.4rem 0 0;
-        color: #cfdae7;
-        font-size: clamp(1rem, 1.8vw, 1.2rem);
-      }
-
-      .start-actions,
-      .result-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-top: 2rem;
-      }
-
-      .primary,
-      .secondary {
-        min-height: 3.15rem;
-        padding: 0.78rem 1.3rem;
-        border-radius: 0.9rem;
-        font-weight: 760;
-      }
-
-      .primary {
-        border-color: rgba(98, 220, 255, 0.55);
-        background: linear-gradient(135deg, #d8f5ff, #66d8fb);
-        color: #06101a;
-        box-shadow: 0 0.9rem 2.5rem rgba(46, 186, 230, 0.23);
-      }
-
-      .primary:hover {
-        background: linear-gradient(135deg, #eefaff, #83e5ff);
-      }
-
-      .secondary {
-        background: rgba(8, 14, 24, 0.62);
-        backdrop-filter: blur(0.9rem);
-      }
-
-      .control-hints {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.55rem;
-        margin-top: 1.5rem;
-      }
-
-      .hint {
-        padding: 0.36rem 0.62rem;
-        border: 1px solid rgba(255, 255, 255, 0.13);
-        border-radius: 999px;
-        background: rgba(4, 9, 16, 0.38);
-        color: #bdc8d6;
-        font-size: 0.76rem;
-      }
-
-      .hud {
-        position: relative;
-        z-index: 3;
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: start;
-        min-height: 100svh;
-        padding: clamp(5.5rem, 9vw, 7rem) clamp(1rem, 3vw, 2.25rem) 1.5rem;
-        pointer-events: none;
-      }
-
-      .hud > * {
-        pointer-events: auto;
-      }
-
-      .status-stack {
-        display: grid;
-        gap: 0.6rem;
-        width: min(18rem, 42vw);
-      }
-
-      .stat {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        align-items: center;
-        gap: 0.65rem;
-        padding: 0.6rem 0.75rem;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 0.8rem;
-        background: rgba(4, 9, 16, 0.63);
-        backdrop-filter: blur(0.8rem);
-      }
-
-      .stat-label {
-        color: #dce5f0;
-        font-size: 0.7rem;
-        font-weight: 760;
-        letter-spacing: 0.08em;
-      }
-
-      .bar {
-        height: 0.34rem;
-        overflow: hidden;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.12);
-      }
-
-      .bar-fill {
-        width: 72%;
-        height: 100%;
-        border-radius: inherit;
-        background: linear-gradient(90deg, var(--cyan), #d9f7ff);
-        transition: width 260ms ease;
-      }
-
-      .timer {
-        position: relative;
-        display: grid;
-        place-items: center;
-        width: clamp(6.5rem, 11vw, 8.2rem);
-        aspect-ratio: 1;
-        margin-top: -0.5rem;
-        border: 0.38rem solid rgba(98, 220, 255, 0.75);
-        border-radius: 50%;
-        background: rgba(3, 8, 15, 0.72);
-        box-shadow: inset 0 0 1.8rem rgba(70, 193, 231, 0.16), 0 0 2rem rgba(70, 193, 231, 0.14);
-        backdrop-filter: blur(0.8rem);
-      }
-
-      .timer span {
-        font-size: clamp(1.7rem, 3.2vw, 2.5rem);
-        font-variant-numeric: tabular-nums;
-        font-weight: 780;
-        letter-spacing: -0.055em;
-      }
-
-      .run-meta {
-        justify-self: end;
-        padding: 0.7rem 0.9rem;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 0.8rem;
-        background: rgba(4, 9, 16, 0.63);
-        color: #d8e0eb;
-        backdrop-filter: blur(0.8rem);
-      }
-
-      .run-meta strong {
-        color: var(--gold);
-      }
-
-      .ability-tray {
-        position: absolute;
-        bottom: 1.5rem;
-        left: 50%;
-        display: flex;
-        gap: 0.65rem;
-        transform: translateX(-50%);
-      }
-
-      .ability {
-        width: clamp(3.4rem, 6vw, 4.5rem);
-        aspect-ratio: 1;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 1rem;
-        background: rgba(4, 9, 16, 0.72);
-        box-shadow: inset 0 0 1.1rem rgba(98, 220, 255, 0.1);
-        cursor: pointer;
-        backdrop-filter: blur(0.8rem);
-      }
-
-      .ability:hover {
-        border-color: var(--cyan);
-      }
-
-      .ability b {
-        display: block;
-        color: var(--cyan);
-        font-size: 1rem;
-      }
-
-      .ability small {
-        color: var(--muted);
-        font-size: 0.62rem;
-      }
-
-      .time-stop {
-        position: absolute;
-        right: clamp(1rem, 3vw, 2.25rem);
-        bottom: 1.5rem;
-      }
-
-      .upgrade-layout {
-        position: relative;
-        z-index: 3;
-        display: flex;
-        align-items: flex-end;
-        min-height: 100svh;
-        padding: clamp(6rem, 10vw, 8rem) clamp(1rem, 5vw, 4.5rem) clamp(2rem, 6vw, 4.5rem);
-      }
-
-      .upgrade-panel,
-      .result-panel {
-        width: min(64rem, 100%);
-        margin-inline: auto;
-        padding: clamp(1.2rem, 3vw, 2rem);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 1.4rem;
-        background: rgba(5, 10, 18, 0.72);
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(1.2rem) saturate(145%);
-      }
-
-      .upgrade-panel h2,
-      .result-panel h2 {
-        margin: 0;
-        font-size: clamp(2rem, 5vw, 4.4rem);
-        letter-spacing: -0.055em;
-        line-height: 0.98;
-      }
-
-      .panel-lede {
-        max-width: 46rem;
-        margin: 0.8rem 0 0;
-        color: #bdc8d7;
-      }
-
-      .choices {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-top: 1.4rem;
-      }
-
-      .choice {
-        min-height: 10rem;
-        padding: 1rem;
-        border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.055);
-        text-align: left;
-      }
-
-      .choice:hover,
-      .choice:focus-visible {
-        border-color: var(--choice-color);
-        background: color-mix(in srgb, var(--choice-color) 13%, rgba(4, 8, 14, 0.75));
-      }
-
-      .choice-mark {
-        display: block;
-        margin-bottom: 1rem;
-        color: var(--choice-color);
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-      }
-
-      .choice strong {
-        display: block;
-        margin-bottom: 0.35rem;
-        font-size: 1.1rem;
-      }
-
-      .choice span:last-child {
-        color: var(--muted);
-        font-size: 0.82rem;
-      }
-
-      .result-layout {
-        position: relative;
-        z-index: 3;
-        display: grid;
-        place-items: center;
-        min-height: 100svh;
-        padding: 6rem 1rem 2rem;
-      }
-
-      .result-panel {
-        width: min(42rem, 100%);
-      }
-
-      .score-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-top: 1.5rem;
-      }
-
-      .score {
-        padding: 0.95rem;
-        border: 1px solid var(--line);
-        border-radius: 0.9rem;
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .score span {
-        display: block;
-        color: var(--muted);
-        font-size: 0.7rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .score strong {
-        display: block;
-        margin-top: 0.25rem;
-        font-size: 1.5rem;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .spec-drawer {
-        position: fixed;
-        z-index: 50;
-        top: 0;
-        right: 0;
-        width: min(28rem, 92vw);
-        height: 100svh;
-        overflow-y: auto;
-        padding: 5.2rem 1.25rem 2rem;
-        border-left: 1px solid var(--line);
-        background: rgba(8, 13, 22, 0.92);
-        box-shadow: -1rem 0 4rem rgba(0, 0, 0, 0.38);
-        backdrop-filter: blur(1.4rem) saturate(140%);
-        transform: translateX(105%);
-        transition: transform 360ms cubic-bezier(0.2, 0.75, 0.28, 1);
-      }
-
-      .spec-drawer.open {
-        transform: translateX(0);
-      }
-
-      .spec-drawer h2 {
-        margin: 0;
-        font-size: 2rem;
-        letter-spacing: -0.04em;
-      }
-
-      .spec-list {
-        display: grid;
-        gap: 0;
-        margin-top: 1rem;
-      }
-
-      .spec-item {
-        padding: 1rem 0;
-        border-top: 1px solid var(--line);
-      }
-
-      .spec-item b {
-        display: block;
-        margin-bottom: 0.25rem;
-        color: var(--cyan);
-        font-size: 0.72rem;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-      }
-
-      .spec-item p {
-        margin: 0;
-        color: #c5cfdd;
-        font-size: 0.88rem;
-      }
-
-      .drawer-close {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-      }
-
-      .build-toast {
-        position: fixed;
-        z-index: 40;
-        right: 1rem;
-        bottom: 1rem;
-        max-width: 20rem;
-        padding: 0.75rem 0.9rem;
-        border: 1px solid rgba(98, 220, 255, 0.24);
-        border-radius: 0.8rem;
-        background: rgba(4, 10, 18, 0.86);
-        color: #dcebf6;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(0.5rem);
-        transition: opacity 180ms ease, transform 220ms ease;
-      }
-
-      .build-toast.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      :focus-visible {
-        outline: 0.18rem solid var(--cyan);
-        outline-offset: 0.2rem;
-      }
-
-      [data-scene-focus]:focus {
-        outline: none;
-      }
-
-      @media (max-width: 46rem) {
-        .prototype-label {
-          display: none;
-        }
-
-        .hud {
-          grid-template-columns: 1fr auto;
-          padding-top: 5rem;
-        }
-
-        .timer {
-          grid-column: 2;
-          grid-row: 1;
-        }
-
-        .run-meta {
-          position: absolute;
-          top: 10rem;
-          right: 1rem;
-          font-size: 0.75rem;
-        }
-
-        .status-stack {
-          width: min(13rem, 58vw);
-        }
-
-        .choices,
-        .score-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .choice {
-          min-height: 0;
-        }
-
-        .time-stop {
-          right: 1rem;
-          bottom: 6.2rem;
-        }
-
-        .ability-tray {
-          right: 1rem;
-          left: 1rem;
-          justify-content: center;
-          transform: none;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-          scroll-behavior: auto !important;
-          transition-duration: 0.01ms !important;
-          animation-duration: 0.01ms !important;
-          animation-iteration-count: 1 !important;
-        }
-      }
-
-      @media (prefers-reduced-transparency: reduce) {
-        .back,
-        .ghost-button,
-        .secondary,
-        .stat,
-        .run-meta,
-        .upgrade-panel,
-        .result-panel,
-        .spec-drawer {
-          background: var(--solid);
-          backdrop-filter: none;
-        }
-      }
-    </style>
+    <meta name="description" content="Babylon.jsで遊べる60秒アクションローグライト、クロノ・アリーナ" />
+    <meta name="theme-color" content="#050914" />
+    <title>クロノ・アリーナ — Babylon.js Playable</title>
+    <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
-    <div class="game-shell">
-      <header class="chrome">
-        <a class="back" href="../index.html">コンセプト一覧へ</a>
-        <span class="prototype-label">Interactive concept / not final gameplay</span>
-        <button class="ghost-button" id="spec-open" type="button" aria-expanded="false" aria-controls="spec-drawer">仕様を見る</button>
+    <main class="game-shell" id="game-shell">
+      <canvas
+        id="render-canvas"
+        tabindex="0"
+        aria-label="クロノ・アリーナの3Dゲーム画面。WASDで移動、Spaceで回避、Q・E・Rで時間能力を使用します。"
+      ></canvas>
+      <div class="scene-grade" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <a class="glass-button topbar__back" href="../index.html">コンセプト一覧</a>
+        <div class="topbar__brand" aria-label="クロノ・アリーナ プレイアブル版">
+          <span class="topbar__sigil" aria-hidden="true"><img src="./assets/production/icon-rewind.png" alt="" /></span>
+          <span><strong>CHRONO ARENA</strong><small>60 SECOND ROGUELITE</small></span>
+        </div>
+        <div class="topbar__actions">
+          <button class="glass-button sound-button" id="audio-button" type="button" aria-pressed="false">SFX ON</button>
+          <label class="quality-control">
+            <span>描画</span>
+            <select id="quality-select" aria-label="描画品質">
+              <option value="low">LOW</option>
+              <option value="medium" selected>MID</option>
+              <option value="high">HIGH</option>
+            </select>
+          </label>
+          <button class="glass-button pause-button" id="pause-button" type="button" aria-label="一時停止">PAUSE</button>
+        </div>
       </header>
 
-      <section class="scene" data-scene="start" aria-hidden="false">
-        <img class="scene-bg" src="assets/gameplay.webp" alt="時計仕掛けの円形闘技場を高角度から見下ろすクロノ・アリーナ" />
-        <div class="start-content">
-          <div class="start-copy">
-            <p class="kicker">One minute. One build. No wasted second.</p>
-            <h1 data-scene-focus tabindex="-1">クロノ・アリーナ</h1>
-            <p class="subtitle">60秒で戦い、能力を組み上げ、時間そのものを武器にする。固定見下ろし型の短時間アクションローグライト。</p>
-            <div class="start-actions">
-              <button class="primary" type="button" data-action="start-run">60秒ランを開始</button>
-              <button class="secondary" type="button" data-action="show-upgrade">アップグレード画面を見る</button>
-            </div>
-            <div class="control-hints" aria-label="操作方法">
-              <span class="hint">WASD 移動</span>
-              <span class="hint">マウス 照準</span>
-              <span class="hint">Space 回避</span>
-              <span class="hint">Q / E / R 能力</span>
-            </div>
+      <section class="hud" id="hud" hidden aria-label="戦闘状況">
+        <div class="hud__vitals glass-panel">
+          <div class="meter-row">
+            <span>HP</span>
+            <div class="meter"><div class="meter__fill meter__fill--hp" id="hp-fill"></div></div>
+            <strong id="hp-value">100</strong>
+          </div>
+          <div class="meter-row">
+            <span>XP</span>
+            <div class="meter"><div class="meter__fill meter__fill--xp" id="xp-fill"></div></div>
+            <strong id="level-value">01</strong>
+          </div>
+        </div>
+
+        <div class="timer" id="timer" style="--time-progress:1">
+          <span class="timer__eyebrow">REMAIN</span>
+          <strong id="time-value">60</strong>
+          <span class="timer__unit">SECONDS</span>
+        </div>
+
+        <div class="boss-meter" id="boss-meter" hidden aria-live="polite">
+          <div class="boss-meter__label"><span>時喰らいヴァルゴス</span><strong id="boss-hp-value">52 / 52</strong></div>
+          <div class="boss-meter__track"><div class="boss-meter__fill" id="boss-hp-fill"></div></div>
+        </div>
+
+        <div class="hud__score glass-panel">
+          <span>DEFEATED <strong id="kill-value">000</strong></span>
+          <span>SHARDS <strong id="shard-value">000</strong></span>
+        </div>
+
+        <div class="ability-tray" aria-label="時間能力">
+          <button class="ability" type="button" data-skill="q">
+            <span class="ability__visual"><img src="./assets/production/icon-slash.png" alt="" /><span class="ability__key">Q</span></span>
+            <span class="ability__copy"><strong>未来斬り</strong><small>−2秒 / 2秒先を斬る</small></span>
+            <span class="ability__state" data-ability-state="q" aria-hidden="true">READY</span>
+            <i class="ability__cooldown" data-cooldown="q"></i>
+          </button>
+          <button class="ability" type="button" data-skill="e">
+            <span class="ability__visual"><img src="./assets/production/icon-stop.png" alt="" /><span class="ability__key">E</span></span>
+            <span class="ability__copy"><strong>停止領域</strong><small>−3秒 / 2.5秒停止</small></span>
+            <span class="ability__state" data-ability-state="e" aria-hidden="true">READY</span>
+            <i class="ability__cooldown" data-cooldown="e"></i>
+          </button>
+          <button class="ability" type="button" data-skill="r">
+            <span class="ability__visual"><img src="./assets/production/icon-rewind.png" alt="" /><span class="ability__key">R</span></span>
+            <span class="ability__copy"><strong>巻き戻し</strong><small>−4秒 / 3秒前へ</small></span>
+            <span class="ability__state" data-ability-state="r" aria-hidden="true">READY</span>
+            <i class="ability__cooldown" data-cooldown="r"></i>
+          </button>
+          <button class="ability ability--dash" type="button" data-skill="dash">
+            <span class="ability__visual"><img src="./assets/production/icon-dash.png" alt="" /><span class="ability__key">SPACE</span></span>
+            <span class="ability__copy"><strong>残像回避</strong><small>移動方向へ跳ぶ</small></span>
+            <span class="ability__state" data-ability-state="dash" aria-hidden="true">READY</span>
+            <i class="ability__cooldown" data-cooldown="dash"></i>
+          </button>
+        </div>
+
+        <p class="auto-attack glass-panel">最も近い敵へ自動攻撃</p>
+      </section>
+
+      <section class="overlay overlay--start" id="start-screen" aria-labelledby="game-title">
+        <div class="poster" aria-hidden="true"></div>
+        <div class="overlay__scrim" aria-hidden="true"></div>
+        <div class="start-copy">
+          <p class="kicker">One minute. One build. No wasted second.</p>
+          <h1 id="game-title">クロノ・<br />アリーナ</h1>
+          <p class="lede">60秒を生き残り、残り時間そのものを力へ変える。最後の15秒には、時喰らいヴァルゴスが顕現する。</p>
+          <div class="start-actions">
+            <button class="primary-button" id="start-button" type="button" disabled>60秒ランを開始</button>
+            <a class="secondary-button" href="SPEC.md" target="_blank" rel="noreferrer">仕様ドラフトを見る</a>
+          </div>
+          <div class="controls" aria-label="操作方法">
+            <span><kbd>WASD</kbd> 移動</span>
+            <span><kbd>SPACE</kbd> 回避</span>
+            <span><kbd>Q E R</kbd> 時間能力</span>
+            <span><kbd>ESC</kbd> ポーズ</span>
+          </div>
+          <p class="asset-status" id="asset-status" aria-live="polite">Blenderモデルを準備中…</p>
+          <p class="start-note">通常攻撃は自動です。二刀の接触フレームと攻撃判定が同期します。</p>
+        </div>
+      </section>
+
+      <section class="overlay overlay--choice" id="upgrade-screen" hidden inert aria-labelledby="upgrade-title">
+        <div class="choice-backdrop" aria-hidden="true"></div>
+        <div class="choice-panel glass-panel">
+          <p class="kicker">Time fracture / world paused</p>
+          <h2 id="upgrade-title">次の30秒を変える。</h2>
+          <p class="lede">時間は止まっています。遺物をひとつ選ぶと、その瞬間から戦闘へ戻ります。</p>
+          <div class="upgrade-grid">
+            <button class="upgrade-card upgrade-card--cyan" type="button" data-upgrade="blade">
+              <span class="upgrade-card__relic" aria-hidden="true"><img src="./assets/production/icon-slash.png" alt="" /></span>
+              <span class="upgrade-card__type">CYAN RELIC</span>
+              <strong>秒針の刃</strong>
+              <small>自動攻撃が32%高速化し、弾が敵を1体貫通する。</small>
+            </button>
+            <button class="upgrade-card upgrade-card--violet" type="button" data-upgrade="causality">
+              <span class="upgrade-card__relic" aria-hidden="true"><img src="./assets/production/icon-stop.png" alt="" /></span>
+              <span class="upgrade-card__type">VIOLET RELIC</span>
+              <strong>因果の環</strong>
+              <small>3回目ごとの自動攻撃が別の標的へ複製される。</small>
+            </button>
+            <button class="upgrade-card upgrade-card--gold" type="button" data-upgrade="hourglass">
+              <span class="upgrade-card__relic" aria-hidden="true"><img src="./assets/production/icon-rewind.png" alt="" /></span>
+              <span class="upgrade-card__type">GOLDEN RELIC</span>
+              <strong>砂時計の心臓</strong>
+              <small>残り10秒になると敵と敵弾だけが55%遅くなる。</small>
+            </button>
           </div>
         </div>
       </section>
 
-      <section class="scene gameplay" data-scene="gameplay" aria-hidden="true" inert>
-        <img class="scene-bg" src="assets/gameplay.webp" alt="敵に囲まれたクロノ・アリーナの戦闘画面" />
-        <div class="hud">
-          <div class="status-stack">
-            <div class="stat">
-              <span class="stat-label">HP</span>
-              <span class="bar"><span class="bar-fill" id="health-fill"></span></span>
-              <strong id="health-value">87</strong>
-            </div>
-            <div class="stat">
-              <span class="stat-label">XP</span>
-              <span class="bar"><span class="bar-fill" id="xp-fill" style="width:34%"></span></span>
-              <strong id="level-value">Lv.1</strong>
-            </div>
-          </div>
-
-          <div class="timer" data-scene-focus tabindex="-1" aria-label="残り時間"><span id="timer-value">01:00</span></div>
-
-          <div class="run-meta">
-            <div>CHAIN <strong id="chain-value">12</strong></div>
-            <div>SHARDS <strong id="shard-value">24</strong></div>
-          </div>
-
-          <div class="ability-tray" aria-label="能力">
-            <button class="ability" type="button" data-ability="時断ち"><b>Q</b><small>時断ち</small></button>
-            <button class="ability" type="button" data-ability="残像回避"><b>E</b><small>残像回避</small></button>
-            <button class="ability" type="button" data-ability="巻き戻し"><b>R</b><small>巻き戻し</small></button>
-          </div>
-
-          <button class="secondary time-stop" type="button" data-action="show-upgrade">時間停止を試す</button>
+      <section class="overlay overlay--compact" id="pause-screen" hidden inert aria-labelledby="pause-title">
+        <div class="compact-panel glass-panel">
+          <p class="kicker">Timeline suspended</p>
+          <h2 id="pause-title">時間を停止中</h2>
+          <p>入力とタイマーは止まっています。</p>
+          <button class="primary-button" id="resume-button" type="button">戦闘へ戻る</button>
+          <button class="secondary-button" id="restart-from-pause" type="button">最初からやり直す</button>
         </div>
       </section>
 
-      <section class="scene" data-scene="upgrade" aria-hidden="true" inert>
-        <img class="scene-bg" src="assets/time-freeze-upgrade.webp" alt="時間が停止した闘技場に3つの強化遺物が浮かぶ選択画面" />
-        <div class="upgrade-layout">
-          <div class="upgrade-panel">
-            <p class="kicker">Time fracture / choose one</p>
-            <h2 data-scene-focus tabindex="-1">次の30秒を変える。</h2>
-            <p class="panel-lede">強化は短く、効果は大きく。選んだ瞬間に戦闘へ戻り、現在の勢いを切らない。</p>
-            <div class="choices">
-              <button class="choice" style="--choice-color:var(--cyan)" type="button" data-upgrade="秒針の刃">
-                <span class="choice-mark">Cyan relic</span>
-                <strong>秒針の刃</strong>
-                <span>移動距離に応じて斬撃を蓄積。回避後の一撃が貫通する。</span>
-              </button>
-              <button class="choice" style="--choice-color:var(--violet)" type="button" data-upgrade="因果の環">
-                <span class="choice-mark">Violet relic</span>
-                <strong>因果の環</strong>
-                <span>同じ敵へ3回命中すると、最初の攻撃がもう一度発生する。</span>
-              </button>
-              <button class="choice" style="--choice-color:var(--gold)" type="button" data-upgrade="砂時計の心臓">
-                <span class="choice-mark">Golden relic</span>
-                <strong>砂時計の心臓</strong>
-                <span>残り10秒で時間が半速化。自分の移動速度は維持される。</span>
-              </button>
-            </div>
+      <section class="overlay overlay--result" id="result-screen" hidden inert aria-labelledby="result-title">
+        <div class="result-panel glass-panel">
+          <div class="result-rank" aria-label="ランク"><span>RANK</span><strong id="result-rank">A</strong></div>
+          <div>
+            <p class="kicker" id="result-kicker">Run complete</p>
+            <h2 id="result-title">時間は、味方した。</h2>
+            <p class="lede" id="result-description">60秒を生存しました。</p>
+          </div>
+          <dl class="result-stats">
+            <div><dt>DEFEATED</dt><dd id="result-kills">0</dd></div>
+            <div><dt>TIME SHARDS</dt><dd id="result-shards">0</dd></div>
+            <div><dt>RELIC</dt><dd id="result-upgrade">なし</dd></div>
+          </dl>
+          <div class="result-actions">
+            <button class="primary-button" id="retry-button" type="button">もう一度挑戦</button>
+            <a class="secondary-button" href="../index.html">コンセプト一覧へ</a>
           </div>
         </div>
       </section>
 
-      <section class="scene" data-scene="result" aria-hidden="true" inert>
-        <img class="scene-bg" src="assets/time-freeze-upgrade.webp" alt="戦闘終了後の静かなクロノ・アリーナ" />
-        <div class="result-layout">
-          <div class="result-panel">
-            <p class="kicker">Run complete</p>
-            <h2 data-scene-focus tabindex="-1">時間は、味方した。</h2>
-            <p class="panel-lede" id="result-copy">60秒を生存。選んだ遺物は次のランへ1つだけ持ち越せる。</p>
-            <div class="score-grid">
-              <div class="score"><span>Defeated</span><strong id="result-kills">84</strong></div>
-              <div class="score"><span>Best chain</span><strong id="result-chain">31</strong></div>
-              <div class="score"><span>Time shards</span><strong id="result-shards">46</strong></div>
-            </div>
-            <div class="result-actions">
-              <button class="primary" type="button" data-action="start-run">もう一度</button>
-              <button class="secondary" type="button" data-action="show-start">タイトルへ戻る</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <aside class="spec-drawer" id="spec-drawer" aria-hidden="true" inert>
-        <button class="ghost-button drawer-close" id="spec-close" type="button">閉じる</button>
-        <p class="kicker">Prototype brief</p>
-        <h2>ゲームの芯</h2>
-        <div class="spec-list">
-          <div class="spec-item"><b>視点</b><p>高角度3/4見下ろし。アリーナ全体を固定表示し、必要時だけ軽く追従する。</p></div>
-          <div class="spec-item"><b>1ラン</b><p>60秒戦闘＋10〜15秒の強化選択。1セッションは5〜8ランで完結する。</p></div>
-          <div class="spec-item"><b>操作</b><p>通常攻撃は自動。プレイヤーは移動、回避、3つの能動スキルへ集中する。</p></div>
-          <div class="spec-item"><b>独自性</b><p>強い能力ほど残り時間を消費する。火力、時間、次の強化機会が同じ資源になる。</p></div>
-          <div class="spec-item"><b>最初のMVP</b><p>1アリーナ、敵3種、ボス1体、強化12種。敵数よりビルド完成の速さを検証する。</p></div>
-          <div class="spec-item"><b>Babylon.js</b><p>Thin Instances、床面テレグラフ、固定カメラ向けカリング、GPUパーティクルを優先する。</p></div>
-        </div>
-      </aside>
-
-      <div class="build-toast" id="toast" role="status" aria-live="polite"></div>
-    </div>
-
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <p class="sr-only" id="announcer" aria-live="assertive"></p>
+      <div class="boot-error" id="boot-error" hidden role="alert">
+        3Dエンジンを開始できませんでした。WebGL対応ブラウザで再読み込みしてください。
+      </div>
+    </main>
     <script>
-      const scenes = [...document.querySelectorAll("[data-scene]")];
-      const timerValue = document.querySelector("#timer-value");
-      const healthFill = document.querySelector("#health-fill");
-      const healthValue = document.querySelector("#health-value");
-      const xpFill = document.querySelector("#xp-fill");
-      const levelValue = document.querySelector("#level-value");
-      const chainValue = document.querySelector("#chain-value");
-      const shardValue = document.querySelector("#shard-value");
-      const resultKills = document.querySelector("#result-kills");
-      const resultChain = document.querySelector("#result-chain");
-      const resultShards = document.querySelector("#result-shards");
-      const drawer = document.querySelector("#spec-drawer");
-      const openDrawer = document.querySelector("#spec-open");
-      const closeDrawer = document.querySelector("#spec-close");
-      const toast = document.querySelector("#toast");
-
-      let currentScene = "start";
-      let remaining = 60;
-      let runInterval = null;
-      let kills = 0;
-      let bestChain = 12;
-      let shards = 24;
-      let selectedUpgrade = "未選択";
-      let toastTimer = null;
-
-      const formatTime = (seconds) => `00:${String(Math.max(0, seconds)).padStart(2, "0")}`;
-
-      const showScene = (name) => {
-        currentScene = name;
-        scenes.forEach((scene) => {
-          const isActive = scene.dataset.scene === name;
-          scene.setAttribute("aria-hidden", String(!isActive));
-          scene.toggleAttribute("inert", !isActive);
-        });
-        scenes.find((scene) => scene.dataset.scene === name)
-          ?.querySelector("[data-scene-focus]")
-          ?.focus({ preventScroll: true });
-        if (name !== "gameplay") clearInterval(runInterval);
-      };
-
-      const showToast = (message) => {
-        toast.textContent = message;
-        toast.classList.add("show");
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
-      };
-
-      const finishRun = () => {
-        clearInterval(runInterval);
-        resultKills.textContent = String(Math.max(84, kills));
-        resultChain.textContent = String(Math.max(31, bestChain));
-        resultShards.textContent = String(Math.max(46, shards));
-        document.querySelector("#result-copy").textContent = `「${selectedUpgrade}」を獲得。次のランへ1つだけ持ち越せる。`;
-        showScene("result");
-      };
-
-      const startRun = () => {
-        clearInterval(runInterval);
-        remaining = 60;
-        kills = 0;
-        bestChain = 12;
-        shards = 24;
-        timerValue.textContent = formatTime(remaining);
-        showScene("gameplay");
-
-        runInterval = setInterval(() => {
-          remaining -= 1;
-          kills += 1 + Math.floor(Math.random() * 3);
-          bestChain = Math.max(bestChain, 12 + Math.floor((60 - remaining) * 0.45));
-          shards += remaining % 4 === 0 ? 1 : 0;
-          const hp = Math.max(34, 87 - Math.floor((60 - remaining) * 0.38));
-          const xp = 34 + ((60 - remaining) * 3) % 66;
-
-          timerValue.textContent = formatTime(remaining);
-          healthValue.textContent = String(hp);
-          healthFill.style.width = `${hp}%`;
-          xpFill.style.width = `${xp}%`;
-          levelValue.textContent = `Lv.${1 + Math.floor((60 - remaining) / 20)}`;
-          chainValue.textContent = String(bestChain);
-          shardValue.textContent = String(shards);
-
-          if (remaining === 30) showScene("upgrade");
-          if (remaining <= 0) finishRun();
-        }, 1000);
-      };
-
-      document.addEventListener("click", (event) => {
-        const action = event.target.closest("[data-action]")?.dataset.action;
-        if (action === "start-run") startRun();
-        if (action === "show-upgrade") showScene("upgrade");
-        if (action === "show-start") showScene("start");
-
-        const ability = event.target.closest("[data-ability]")?.dataset.ability;
-        if (ability) showToast(`${ability}を発動 — 入力へ即時フィードバック`);
-
-        const upgrade = event.target.closest("[data-upgrade]")?.dataset.upgrade;
-        if (upgrade) {
-          selectedUpgrade = upgrade;
-          showToast(`${upgrade}を獲得`);
-          remaining = Math.min(30, Math.max(1, remaining));
-          showScene("gameplay");
-          clearInterval(runInterval);
-          runInterval = setInterval(() => {
-            remaining -= 1;
-            kills += 2;
-            bestChain += remaining % 3 === 0 ? 1 : 0;
-            shards += remaining % 4 === 0 ? 1 : 0;
-            timerValue.textContent = formatTime(remaining);
-            chainValue.textContent = String(bestChain);
-            shardValue.textContent = String(shards);
-            if (remaining <= 0) finishRun();
-          }, 1000);
-        }
-      });
-
-      const setDrawer = (open) => {
-        drawer.classList.toggle("open", open);
-        drawer.setAttribute("aria-hidden", String(!open));
-        drawer.toggleAttribute("inert", !open);
-        openDrawer.setAttribute("aria-expanded", String(open));
-        if (open) closeDrawer.focus();
-        else openDrawer.focus();
-      };
-
-      openDrawer.addEventListener("click", () => setDrawer(true));
-      closeDrawer.addEventListener("click", () => setDrawer(false));
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && drawer.classList.contains("open")) setDrawer(false);
-      });
+      window.setTimeout(() => {
+        const shell = document.querySelector("#game-shell");
+        if (shell?.dataset.ready === "true") return;
+        const error = document.querySelector("#boot-error");
+        const start = document.querySelector("#start-button");
+        error.hidden = false;
+        error.textContent = "プレイ版はchrono-arenaで pnpm install → pnpm dev を実行して開いてください。";
+        start.disabled = true;
+        start.textContent = "Viteでの起動が必要です";
+      }, 12000);
     </script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

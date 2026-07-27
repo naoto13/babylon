@@ -1,0 +1,40 @@
+{
+  "name": "chrono-arena",
+  "version": "1.0.0",
+  "description": "A 60-second Babylon.js action roguelite prototype.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "assets:build": "blender --background --factory-startup --python-exit-code 1 --python scripts/build_blender_assets.py",
+    "assets:build:hero": "blender --background --python-exit-code 1 --python scripts/build_mpfb_hero.py",
+    "assets:build:enemies:hd": "blender --background --factory-startup --python-exit-code 1 --python scripts/build_high_detail_enemies.py",
+    "assets:preview:hero": "blender --background assets/production/blender/chrono-duelist-custom.blend --python-exit-code 1 --python scripts/render_hero_motion_previews.py",
+    "assets:preview:enemies:hd": "blender --background --factory-startup --python-exit-code 1 --python scripts/render_enemy_previews.py",
+    "assets:build:chaser:concept": "blender --background --factory-startup --python-exit-code 1 --python scripts/build_concept_chaser.py",
+    "assets:preview:chaser:concept": "blender --background --factory-startup --python-exit-code 1 --python scripts/render_concept_chaser_preview.py",
+    "assets:build:humanoids:concept": "blender --background --python-exit-code 1 --python scripts/build_concept_humanoid_enemies.py",
+    "assets:build:enemies:concept": "pnpm assets:build:chaser:concept && pnpm assets:build:humanoids:concept",
+    "assets:preview:enemies:concept": "blender --background --factory-startup --python-exit-code 1 --python scripts/render_concept_humanoid_previews.py",
+    "assets:audit:surfaces": "blender --background --factory-startup --python-exit-code 1 --python scripts/audit_enemy_surface_quality.py -- chaser-concept shooter-concept thief-concept boss-concept",
+    "assets:validate": "blender --background --factory-startup --python-exit-code 1 --python scripts/validate_blender_assets.py",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --test && vite build"
+  },
+  "keywords": [
+    "babylonjs",
+    "roguelite",
+    "browser-game"
+  ],
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.33.2",
+  "dependencies": {
+    "@babylonjs/core": "^9.17.1",
+    "@babylonjs/loaders": "^9.17.1"
+  },
+  "devDependencies": {
+    "vite": "^8.1.5"
+  }
+}
