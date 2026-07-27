@@ -1341,6 +1341,7 @@ async function loadHeroProp(name, config, context) {
       registerHeroLayoutAnchor(name, heroAnchor, context);
       for (const fallback of fallbacks) fallback.setEnabled(false);
       context.heroAnchors.set(name, heroAnchor);
+      if (name === "cauldron") fitCauldronInterior(meshes, context.scene);
     }
   } catch (error) {
     for (const mesh of meshes) {
@@ -1350,6 +1351,37 @@ async function loadHeroProp(name, config, context) {
     heroAnchor?.setEnabled(false);
     logHeroFallback(name, error);
   }
+}
+
+// 取り込んだ釜の口の高さ・半径・中心を頂点から実測し、暗い空洞をその内側へ収める。
+// 上端は縁の裏へ隠して、空洞の輪郭が直線として見えないようにする。
+function fitCauldronInterior(meshes, scene) {
+  const interior = scene.getMeshByName("cauldron-interior");
+  if (!interior) return;
+  let topY = -Infinity;
+  const points = [];
+  for (const mesh of meshes) {
+    const positions = mesh.getVerticesData?.(BABYLON.VertexBuffer.PositionKind);
+    if (!positions) continue;
+    mesh.computeWorldMatrix(true);
+    const matrix = mesh.getWorldMatrix();
+    for (let i = 0; i < positions.length; i += 3) {
+      const world = BABYLON.Vector3.TransformCoordinates(
+        new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]), matrix,
+      );
+      points.push(world);
+      if (world.y > topY) topY = world.y;
+    }
+  }
+  const rim = points.filter((p) => p.y > topY - 0.08);
+  if (rim.length < 8) return;
+  const centreX = rim.reduce((sum, p) => sum + p.x, 0) / rim.length;
+  const centreZ = rim.reduce((sum, p) => sum + p.z, 0) / rim.length;
+  const radius = rim.reduce((max, p) => Math.max(max, Math.hypot(p.x - centreX, p.z - centreZ)), 0);
+  if (radius < 0.1) return;
+  const height = 0.9;
+  interior.scaling.set(radius / 0.75 * 0.96, 1, radius / 0.75 * 0.96);
+  interior.position.set(centreX, topY - 0.14 - height / 2, centreZ);
 }
 
 function loadHeroAssets(context) {
@@ -1574,13 +1606,14 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
   const rimMaterial = material("cauldron-rim", "#c59b54", scene);
   rim.material = rimMaterial;
   rim.isPickable = false;
-  // This is a static, unlit mouth shadow rather than a potion surface. It keeps
-  // the open cauldron readable when the liquid effect is intentionally absent.
-  const cauldronInterior = BABYLON.MeshBuilder.CreateDisc("cauldron-interior", { radius: 0.86, tessellation: 32 }, scene);
-  cauldronInterior.rotation.x = Math.PI / 2;
-  cauldronInterior.position = new BABYLON.Vector3(0, 1.6, 0.3);
-  const cauldronInteriorMaterial = material("cauldron-interior", "#10131e", scene);
-  cauldronInteriorMaterial.backFaceCulling = false;
+  // 釜の中身は「暗い空洞」として見せる。水平な面ではなく内側に置いた筒なのは、
+  // カメラが口とほぼ同じ高さにあり、水平面は真横から見えて機能しないため。
+  // 取り込みモデルの明るい内壁を隠す役目も持つ（内壁の斑模様が水面に見えてしまう）。
+  const cauldronInterior = BABYLON.MeshBuilder.CreateCylinder("cauldron-interior", {
+    diameterTop: 1.5, diameterBottom: 1.06, height: 0.9, tessellation: 36,
+  }, scene);
+  cauldronInterior.position = new BABYLON.Vector3(0, 1.15, 0.3);
+  const cauldronInteriorMaterial = material("cauldron-interior", "#0f1526", scene, "#05080f");
   cauldronInterior.material = cauldronInteriorMaterial;
   cauldronInterior.isPickable = false;
   // The ember bed remains the simmer action target, with a shallow silhouette
