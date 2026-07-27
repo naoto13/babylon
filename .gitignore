@@ -2,3 +2,4 @@ tools/spar3d/venv/
 tools/spar3d/hf-cache/
 tools/spar3d/repo/
 tools/spar3d/output/
+.pnpm-store/
