@@ -7,7 +7,7 @@ Babylon.jsで制作するブラウザゲーム12案を、生成したゲーム�
 `index.html`を直接開くか、プロジェクトルートで次を実行します。
 
 ```bash
-python3 -m http.server 4173
+python3 tools/serve.py 4173  # no-cache ヘッダー付き（JS/アセット差し替えが即反映）
 ```
 
 ブラウザで `http://127.0.0.1:4173/` を開いてください。
@@ -32,5 +32,5 @@ python3 -m http.server 4173
 
 - `moonlit-potion-workshop/game/index.html`: 月夜のポーション工房の3D実装（MVP）。素材ドラッグ投入、まな板・乳鉢の前処理ジェスチャー、火加減ダイヤル、円ドラッグかき混ぜ、鑑定・納品・後日談、3夜12注文、保留棚、図鑑、ローカルセーブ
 - 技巧システム: かき混ぜの真円度、注ぎ量ゲージの止めどころ、煮込みの秒数ぴったり停止など、プレイヤーの手の巧拙が効力・安定度・副作用へ反映される（設定「判定をやさしく」あり）
-- 起動: 上記の `python3 -m http.server 4173` 後、`http://127.0.0.1:4173/moonlit-potion-workshop/game/` を開く
+- 起動: 上記の `python3 tools/serve.py 4173` 後、`http://127.0.0.1:4173/moonlit-potion-workshop/game/` を開く（配置編集は末尾に `?layout=1`）
 - ロジックの単体テスト: `node --test moonlit-potion-workshop/game/test/`

@@ -1,3 +1,5 @@
+import { getLayoutOverrides } from "./layout-overrides.js";
+
 /* global BABYLON */
 
 const EFFECT_COLOURS = Object.freeze({
@@ -92,21 +94,37 @@ const HERO_ASSETS = Object.freeze({
     special: Object.freeze({ clonePerMaterial: true }),
   }),
 });
+// These adjust only the GLB visual anchors. Procedural meshes remain the
+// gameplay source of truth for stations, stirring, and drop targets.
+const HERO_VISUAL_SCALE = Object.freeze({
+  cauldron: 1.618,
+  cuttingBoard: 1.2,
+  knife: 1.2,
+  mortar: 1.2,
+  pestle: 1.2,
+  heatDial: 1.15,
+  appraisalLens: 1.15,
+  deliveryTray: 1.15,
+  jar: 1.1,
+});
+const HERO_VISUAL_Y_OFFSET = Object.freeze({
+  cauldron: -0.04,
+});
 // Static set dressing stays outside the interaction graph: its GLBs have no
 // action registration or fallback mesh to preserve. Positions are model centres.
 const DRESSING_ASSETS = Object.freeze({
   books: Object.freeze({
     path: "assets/models/dress-books.glb",
-    position: Object.freeze({ x: -4.25, y: 0.81, z: 3.45 }),
+    position: Object.freeze({ x: 1.293, y: 0.81, z: 2.363 }),
     rotationY: -0.18,
-    size: Object.freeze({ height: 0.917, diameter: 1.716 }),
+    size: Object.freeze({ height: 1.115, diameter: 2.088 }),
     family: "leather",
   }),
   plant: Object.freeze({
     path: "assets/models/dress-plant.glb",
-    position: Object.freeze({ x: 4.15, y: 0.875, z: 3.25 }),
+    position: Object.freeze({ x: 4.249, y: 0.875, z: 3.588 }),
     rotationY: -0.42,
-    size: Object.freeze({ height: 0.6, diameter: 0.6 }),
+    size: Object.freeze({ height: 2.032, diameter: 2.032 }),
     family: "plant",
   }),
   candle: Object.freeze({
@@ -121,17 +139,26 @@ const DRESSING_ASSETS = Object.freeze({
   }),
   hourglass: Object.freeze({
     path: "assets/models/dress-hourglass.glb",
-    position: Object.freeze({ x: 3.1, y: 0.88, z: 2.85 }),
+    position: Object.freeze({ x: 2.988, y: 0.88, z: 2.626 }),
     rotationY: 0.36,
-    size: Object.freeze({ height: 0.915, diameter: 0.93 }),
+    size: Object.freeze({ height: 2.096, diameter: 2.131 }),
     family: "wood",
   }),
   crate: Object.freeze({
     path: "assets/models/dress-crate.glb",
-    position: Object.freeze({ x: -4.25, y: 0.915, z: 2.35 }),
-    rotationY: 0.32,
-    size: Object.freeze({ height: 1.02, diameter: 1.62 }),
+    position: Object.freeze({ x: -2.396, y: 0.915, z: 1.182 }),
+    rotationX: 0.5,
+    rotationY: -0.88,
+    size: Object.freeze({ height: 2.019, diameter: 3.207 }),
     family: "wood",
+  }),
+  armillary: Object.freeze({
+    // 真鍮の天球儀。奥の縁に置いて背景の丸窓とシルエットが重ならない位置を選ぶ。
+    path: "assets/models/dress-armillary.glb",
+    position: Object.freeze({ x: 2.25, y: 1.02, z: 3.45 }),
+    rotationY: -0.35,
+    size: Object.freeze({ height: 0.86, diameter: 0.62 }),
+    family: "brass",
   }),
   bottles: Object.freeze({
     path: "assets/models/dress-bottles.glb",
@@ -163,102 +190,106 @@ const DRESSING_ASSETS = Object.freeze({
   }),
   moonOrb: Object.freeze({
     path: "assets/models/dress-moon-orb.glb",
-    position: Object.freeze({ x: -1.0, y: 0.785, z: 1.8 }),
+    position: Object.freeze({ x: -1.288, y: 0.785, z: 0.857 }),
     rotationY: 0,
-    size: Object.freeze({ height: 0.851, diameter: 0.972 }),
+    size: Object.freeze({ height: 0.985, diameter: 1.126 }),
     family: "moonOrb",
     flags: Object.freeze({ includeGlow: true }),
   }),
   compartmentBox: Object.freeze({
     path: "assets/models/dress-compartment-box.glb",
-    position: Object.freeze({ x: -2.45, y: 0.755, z: 1.35 }),
+    position: Object.freeze({ x: -5.5, y: 0.715, z: 4 }),
+    rotationX: 1.05,
     rotationY: 0.32,
-    size: Object.freeze({ height: 0.81, diameter: 3.803 }),
+    rotationZ: -0.85,
+    size: Object.freeze({ height: 2.488, diameter: 11.684 }),
     family: "plain",
   }),
   petalBowl: Object.freeze({
     path: "assets/models/dress-petal-bowl.glb",
-    position: Object.freeze({ x: -3.05, y: 0.73, z: -0.4 }),
+    position: Object.freeze({ x: -2.116, y: 0.73, z: -1.815 }),
     rotationY: 0.1,
-    size: Object.freeze({ height: 0.791, diameter: 1.887 }),
+    size: Object.freeze({ height: 0.791, diameter: 1.888 }),
     family: "plain",
   }),
   crystalBowl: Object.freeze({
     path: "assets/models/dress-crystal-bowl.glb",
-    position: Object.freeze({ x: 2.8, y: 0.73, z: -0.35 }),
+    position: Object.freeze({ x: 3.34, y: 0.73, z: -1.602 }),
     rotationY: -0.15,
-    size: Object.freeze({ height: 0.791, diameter: 1.734 }),
+    size: Object.freeze({ height: 0.831, diameter: 1.821 }),
     family: "plain",
   }),
   spellbook: Object.freeze({
     path: "assets/models/dress-spellbook.glb",
-    position: Object.freeze({ x: -4.35, y: 0.76, z: -0.15 }),
+    position: Object.freeze({ x: -3.607, y: 0.76, z: -1.412 }),
     rotationY: 0.15,
-    size: Object.freeze({ height: 0.545, diameter: 2.741 }),
+    size: Object.freeze({ height: 2.138, diameter: 10.751 }),
     family: "plain",
   }),
   scale: Object.freeze({
     path: "assets/models/dress-scale.glb",
-    position: Object.freeze({ x: 2.1, y: 0.965, z: 2.85 }),
-    rotationY: -0.25,
-    size: Object.freeze({ height: 1.521, diameter: 1.658 }),
+    position: Object.freeze({ x: 2.075, y: 0.965, z: 1.086 }),
+    rotationX: 0.65,
+    rotationY: 0.55,
+    size: Object.freeze({ height: 2.478, diameter: 2.702 }),
     family: "plain",
   }),
   herbBundle: Object.freeze({
     path: "assets/models/dress-herb-bundle.glb",
-    position: Object.freeze({ x: -1.35, y: 0.695, z: 1 }),
+    position: Object.freeze({ x: -1.113, y: 0.695, z: 0.003 }),
     rotationY: -0.5,
-    size: Object.freeze({ height: 0.522, diameter: 2.349 }),
+    size: Object.freeze({ height: 0.850, diameter: 3.826 }),
     family: "plain",
   }),
   alembic: Object.freeze({
     path: "assets/models/dress-alembic.glb",
-    position: Object.freeze({ x: -2.75, y: 0.925, z: 2.95 }),
+    position: Object.freeze({ x: -3.145, y: 0.925, z: 3.301 }),
     rotationY: 0.2,
-    size: Object.freeze({ height: 1.418, diameter: 1.255 }),
+    size: Object.freeze({ height: 2.096, diameter: 1.856 }),
     family: "glass",
   }),
   inkwell: Object.freeze({
     path: "assets/models/dress-inkwell.glb",
-    position: Object.freeze({ x: -3.7, y: 0.7, z: -0.85 }),
+    position: Object.freeze({ x: -1.582, y: 0.7, z: -0.865 }),
     rotationY: -0.3,
-    size: Object.freeze({ height: 0.563, diameter: 0.788 }),
+    size: Object.freeze({ height: 0.536, diameter: 0.751 }),
     family: "plain",
   }),
   candelabra: Object.freeze({
     path: "assets/models/dress-candelabra.glb",
-    position: Object.freeze({ x: -3.65, y: 0.925, z: 2.7 }),
+    position: Object.freeze({ x: -0.972, y: 0.925, z: 4 }),
     rotationY: -0.1,
-    size: Object.freeze({ height: 1.418, diameter: 1.215 }),
+    size: Object.freeze({ height: 2.310, diameter: 1.980 }),
     family: "brass",
   }),
   mushroomBasket: Object.freeze({
     path: "assets/models/dress-mushroom-basket.glb",
-    position: Object.freeze({ x: 1.3, y: 0.75, z: -0.6 }),
+    position: Object.freeze({ x: 1.76, y: 0.75, z: -1.514 }),
     rotationY: 0.2,
-    size: Object.freeze({ height: 0.867, diameter: 1.238 }),
+    size: Object.freeze({ height: 1.413, diameter: 2.017 }),
     family: "wood",
   }),
   starchart: Object.freeze({
     path: "assets/models/dress-starchart.glb",
-    position: Object.freeze({ x: 1.95, y: 0.605, z: -0.15 }),
+    position: Object.freeze({ x: 1.906, y: 0.605, z: -1.252 }),
     rotationY: 0.35,
     fit: "flat",
-    size: Object.freeze({ height: 0.14, diameter: 2.558 }),
+    size: Object.freeze({ height: 0.291, diameter: 5.319 }),
     family: "parchment",
   }),
   flask: Object.freeze({
     path: "assets/models/dress-flask.glb",
-    position: Object.freeze({ x: -1.95, y: 0.825, z: 2.6 }),
+    position: Object.freeze({ x: -1.991, y: 0.825, z: 3.431 }),
     rotationY: -0.28,
-    size: Object.freeze({ height: 1.05, diameter: 1.05 }),
+    size: Object.freeze({ height: 0.481, diameter: 0.481 }),
     family: "glass",
   }),
   censer: Object.freeze({
     path: "assets/models/dress-censer.glb",
-    position: Object.freeze({ x: 1.5, y: 0.775, z: 2.15 }),
+    position: Object.freeze({ x: 1.01, y: 0.755, z: -0.16 }),
+    rotationX: 0.5,
     rotationY: 0.4,
-    size: Object.freeze({ height: 0.84, diameter: 0.84 }),
+    size: Object.freeze({ height: 1.303, diameter: 1.303 }),
     family: "brass",
   }),
   keys: Object.freeze({
@@ -271,21 +302,23 @@ const DRESSING_ASSETS = Object.freeze({
   }),
   teapot: Object.freeze({
     path: "assets/models/dress-teapot.glb",
-    position: Object.freeze({ x: 3.6, y: 0.8, z: 2.7 }),
+    position: Object.freeze({ x: 3.692, y: 0.8, z: 0.734 }),
     rotationY: -0.3,
-    size: Object.freeze({ height: 0.912, diameter: 1.317 }),
+    size: Object.freeze({ height: 1.164, diameter: 1.680 }),
     family: "ceramic",
   }),
   herbPlate: Object.freeze({
     path: "assets/models/dress-herb-plate.glb",
-    position: Object.freeze({ x: -1.5, y: 0.615, z: -0.7 }),
+    position: Object.freeze({ x: -1.078, y: 0.615, z: -1.472 }),
     rotationY: -0.2,
     fit: "flat",
-    size: Object.freeze({ height: 0.204, diameter: 1.275 }),
+    size: Object.freeze({ height: 0.194, diameter: 1.214 }),
     family: "plain",
   }),
 });
 const HERO_SCALE_LIMITS = Object.freeze({ min: 0.0001, max: 10000 });
+const HERO_LAYOUT_SCALE_LIMITS = Object.freeze({ min: 0.3, max: 4 });
+const HERO_LAYOUT_HEIGHT_LIMITS = Object.freeze({ min: 0.3, max: 3.5 });
 const heroAssetLoadScenes = new WeakSet();
 const dressingAssetLoadScenes = new WeakSet();
 const hammeredIronTexturesByScene = new WeakMap();
@@ -846,6 +879,48 @@ function copyTransform(target, source) {
   }
 }
 
+function heroLayoutKey(name) {
+  return `hero:${name}`;
+}
+
+function heroLayoutValues(anchor) {
+  const baseScaling = anchor?.metadata?.heroBaseScaling;
+  const baseY = anchor?.metadata?.heroBaseY;
+  if (!baseScaling || !Number.isFinite(baseScaling.x) || !Number.isFinite(baseY) || baseScaling.x === 0) return null;
+  return {
+    scaleMul: BABYLON.Scalar.Clamp(anchor.scaling.x / baseScaling.x, HERO_LAYOUT_SCALE_LIMITS.min, HERO_LAYOUT_SCALE_LIMITS.max),
+    yOffset: anchor.position.y - baseY,
+  };
+}
+
+function applyHeroLayoutOverride(anchor, override = {}) {
+  const baseScaling = anchor.metadata?.heroBaseScaling;
+  const baseY = anchor.metadata?.heroBaseY;
+  if (!baseScaling || !Number.isFinite(baseY)) return;
+  const scaleMul = Number.isFinite(override.scaleMul)
+    ? BABYLON.Scalar.Clamp(override.scaleMul, HERO_LAYOUT_SCALE_LIMITS.min, HERO_LAYOUT_SCALE_LIMITS.max)
+    : 1;
+  const yOffset = Number.isFinite(override.yOffset) ? override.yOffset : 0;
+  anchor.scaling.copyFrom(baseScaling).scaleInPlace(scaleMul);
+  anchor.position.y = BABYLON.Scalar.Clamp(baseY + yOffset, HERO_LAYOUT_HEIGHT_LIMITS.min, HERO_LAYOUT_HEIGHT_LIMITS.max);
+}
+
+function registerHeroLayoutAnchor(name, anchor, context) {
+  const key = heroLayoutKey(name);
+  anchor.scaling.scaleInPlace(HERO_VISUAL_SCALE[name] ?? 1);
+  anchor.position.y += HERO_VISUAL_Y_OFFSET[name] ?? 0;
+  anchor.metadata = {
+    ...(anchor.metadata ?? {}),
+    heroLayoutKey: key,
+    heroBaseScaling: anchor.scaling.clone(),
+    heroBaseY: anchor.position.y,
+  };
+  const anchors = context.heroLayoutAnchors.get(key) ?? [];
+  anchors.push(anchor);
+  context.heroLayoutAnchors.set(key, anchors);
+  applyHeroLayoutOverride(anchor, context.layoutOverrides[key]);
+}
+
 function heroFallbackMeshes(config, context) {
   return config.hide.flatMap((name) => {
     if (name === "jar-*") return [...context.jars.values()];
@@ -877,7 +952,7 @@ function descendantMeshes(node) {
   return node.getChildMeshes?.(false) ?? [];
 }
 
-function prepareJarHeroClones(prototypeAnchor, context) {
+function prepareJarHeroClones(name, prototypeAnchor, context) {
   const clones = [];
   const createdRoots = [];
   try {
@@ -889,6 +964,7 @@ function prepareJarHeroClones(prototypeAnchor, context) {
       const action = fallback.metadata?.action;
       const home = fallback.metadata?.home?.clone?.() ?? fallback.position.clone();
       clone.metadata = { action, home };
+      registerHeroLayoutAnchor(name, clone, context);
       const meshes = descendantMeshes(clone);
       if (!meshes.length) throw new Error(`${materialId} 用の jar hero mesh がありません`);
       registerHeroAction(meshes, action, context.actions);
@@ -940,6 +1016,9 @@ async function loadHeroProp(name, config, context) {
     const result = await BABYLON.SceneLoader.ImportMeshAsync("", rootUrl, filename, scene);
     meshes = result.meshes;
     if (sceneDisposed) return;
+    if (context.layoutMode) {
+      for (const mesh of meshes) mesh.isPickable = true;
+    }
 
     const bounds = importedBounds(meshes);
     const rawScale = Math.min(config.size.diameter / bounds.diameter, config.size.height / bounds.height);
@@ -957,13 +1036,17 @@ async function loadHeroProp(name, config, context) {
     applyHeroMaterial(meshes, config.family, scene);
 
     if (config.special?.clonePerMaterial) {
-      const clones = prepareJarHeroClones(heroAnchor, context);
+      const clones = prepareJarHeroClones(name, heroAnchor, context);
       heroAnchor.setEnabled(false);
       for (const { materialId, fallback, clone } of clones) {
         context.jars.set(materialId, clone);
         fallback.setEnabled(false);
       }
     } else {
+      context.heroMeshes.set(name, meshes);
+      // Visual scale is a parent-layer multiplier after fit normalisation.
+      // The cauldron fit below therefore measures the final rendered mouth.
+      registerHeroLayoutAnchor(name, heroAnchor, context);
       if (config.special?.liquidMouthFit) fitCauldronLiquid(meshes, context);
       for (const fallback of fallbacks) fallback.setEnabled(false);
       context.heroAnchors.set(name, heroAnchor);
@@ -994,10 +1077,30 @@ function dressingPlacements(config) {
   return config.placements ?? [config];
 }
 
-function placeDressingAnchor(anchor, placement) {
+function dressingKey(name, index) {
+  return index === 0 ? name : `${name}-${index + 1}`;
+}
+
+function placeDressingAnchor(anchor, placement, key, context) {
   const { position } = placement;
   anchor.position.set(position.x, position.y, position.z);
+  anchor.rotationQuaternion = null;
+  anchor.rotation.x = placement.rotationX ?? 0;
   anchor.rotation.y = placement.rotationY ?? 0;
+  anchor.rotation.z = placement.rotationZ ?? 0;
+  anchor.scaling.setAll(1);
+  const override = context.layoutOverrides[key];
+  if (override) {
+    if (typeof override.x === "number") anchor.position.x = override.x;
+    if (typeof override.y === "number") anchor.position.y = override.y;
+    if (typeof override.z === "number") anchor.position.z = override.z;
+    if (typeof override.rotY === "number") anchor.rotation.y = override.rotY;
+    if (typeof override.rotX === "number") anchor.rotation.x = override.rotX;
+    if (typeof override.rotZ === "number") anchor.rotation.z = override.rotZ;
+    if (typeof override.scaleMul === "number") anchor.scaling.setAll(override.scaleMul);
+  }
+  anchor.metadata = { ...(anchor.metadata ?? {}), dressingKey: key };
+  context.dressingAnchors.set(key, { anchor, placement });
 }
 
 function hideProceduralDressing(config, scene) {
@@ -1029,8 +1132,9 @@ async function loadDressingProp(name, config, context) {
     const verticalScale = config.fit === "flat"
       ? BABYLON.Scalar.Clamp(config.size.height / bounds.height, HERO_SCALE_LIMITS.min, HERO_SCALE_LIMITS.max)
       : scale;
+    const placements = dressingPlacements(config);
     const anchor = new BABYLON.TransformNode(`${name}-dressing-anchor`, scene);
-    placeDressingAnchor(anchor, dressingPlacements(config)[0]);
+    placeDressingAnchor(anchor, placements[0], dressingKey(name, 0), context);
     anchors.push(anchor);
     const modelRoot = new BABYLON.TransformNode(`${name}-dressing-model`, scene);
     modelRoot.parent = anchor;
@@ -1041,13 +1145,13 @@ async function loadDressingProp(name, config, context) {
       -bounds.centre.z * horizontalScale,
     );
     for (const root of importedRoots(meshes)) root.parent = modelRoot;
-    for (const mesh of meshes) mesh.isPickable = false;
+    for (const mesh of meshes) mesh.isPickable = Boolean(context.layoutMode);
     applyHeroMaterial(meshes, config.family, scene);
 
-    for (const [index, placement] of dressingPlacements(config).slice(1).entries()) {
+    for (const [index, placement] of placements.slice(1).entries()) {
       const clone = anchor.clone(`${name}-dressing-anchor-${index + 1}`, null);
       if (!clone) throw new Error("装飾用 GLB を複製できません");
-      placeDressingAnchor(clone, placement);
+      placeDressingAnchor(clone, placement, dressingKey(name, index + 1), context);
       anchors.push(clone);
     }
 
@@ -1107,7 +1211,7 @@ function dominantEffect(items) {
 }
 
 /** Builds the complete low-poly workshop and exposes only scene-facing controls. */
-export function createWorkshopScene(engine, canvas, materials) {
+export function createWorkshopScene(engine, canvas, materials, { layoutMode = false } = {}) {
   const scene = new BABYLON.Scene(engine);
   scene.clearColor = BABYLON.Color4.FromHexString("#081124ff");
   scene.ambientColor = colour3("#172b4b");
@@ -1138,6 +1242,9 @@ export function createWorkshopScene(engine, canvas, materials) {
 
   const actions = new Map();
   const heroAnchors = new Map();
+  const heroLayoutAnchors = new Map();
+  const heroMeshes = new Map();
+  const layoutOverrides = getLayoutOverrides();
   const wood = material("wood", "#47322d", scene);
   const woodLight = material("wood-light", "#725040", scene);
   const iron = material("iron", "#20283d", scene, "#070a12");
@@ -1305,6 +1412,10 @@ export function createWorkshopScene(engine, canvas, materials) {
     ingredientsById: new Map(materials.map((ingredient) => [ingredient.id, ingredient])),
     cauldron,
     heroAnchors,
+    heroLayoutAnchors,
+    heroMeshes,
+    layoutOverrides,
+    layoutMode,
   });
 
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -1317,8 +1428,15 @@ export function createWorkshopScene(engine, canvas, materials) {
     lensRim: lensGlowRim,
     prefersReducedMotion,
   });
-  loadDressingAssets({ scene, addGlowMesh: atmosphere.addGlowMesh });
-  let highlighted = null;
+  const dressingAnchors = new Map();
+  loadDressingAssets({
+    scene,
+    addGlowMesh: atmosphere.addGlowMesh,
+    dressingAnchors,
+    layoutMode,
+    layoutOverrides,
+  });
+  let highlighted = [];
   let liquidStability = 70;
   let liquidOvermixed = false;
   let currentTemp = "mid";
@@ -1448,12 +1566,16 @@ export function createWorkshopScene(engine, canvas, materials) {
     return null;
   }
 
-  function worldFromPointer(clientX, clientY) {
+  function worldFromPointerAtHeight(clientX, clientY, height) {
     const rect = canvas.getBoundingClientRect();
     const ray = scene.createPickingRay(clientX - rect.left, clientY - rect.top, BABYLON.Matrix.Identity(), camera);
-    const plane = new BABYLON.Plane(0, 1, 0, -0.96);
+    const plane = new BABYLON.Plane(0, 1, 0, -height);
     const distance = ray.intersectsPlane(plane);
     return distance === null ? null : ray.origin.add(ray.direction.scale(distance));
+  }
+
+  function worldFromPointer(clientX, clientY) {
+    return worldFromPointerAtHeight(clientX, clientY, 0.96);
   }
 
   function nearestStation(world) {
@@ -1490,11 +1612,75 @@ export function createWorkshopScene(engine, canvas, materials) {
     if (target) jar.position.copyFrom(target);
   }
 
-  function setHighlight(mesh) {
-    if (highlighted === mesh) return;
-    if (highlighted) highlight.removeMesh(highlighted);
-    highlighted = mesh;
-    if (highlighted) highlight.addMesh(highlighted, colour3("#f6d987"));
+  function setHighlight(meshOrMeshes) {
+    const next = (Array.isArray(meshOrMeshes) ? meshOrMeshes : [meshOrMeshes]).filter(Boolean);
+    if (highlighted.length === next.length && highlighted.every((mesh, index) => mesh === next[index])) return;
+    for (const mesh of highlighted) highlight.removeMesh(mesh);
+    highlighted = next;
+    for (const mesh of highlighted) highlight.addMesh(mesh, colour3("#f6d987"));
+  }
+
+  function getLayoutAnchor(mesh) {
+    let current = mesh;
+    while (current) {
+      const dressingKey = current.metadata?.dressingKey;
+      if (dressingKey) return dressingAnchors.get(dressingKey)?.anchor ?? null;
+      if (current.metadata?.heroLayoutKey) return current;
+      current = current.parent;
+    }
+    return null;
+  }
+
+  function getLayoutKey(anchor) {
+    return anchor?.metadata?.dressingKey ?? anchor?.metadata?.heroLayoutKey ?? null;
+  }
+
+  function isHeroLayoutAnchor(anchor) {
+    return Boolean(anchor?.metadata?.heroLayoutKey);
+  }
+
+  function applyHeroLayoutGroup(key, override) {
+    const anchors = heroLayoutAnchors.get(key);
+    if (!anchors?.length) return null;
+    for (const anchor of anchors) applyHeroLayoutOverride(anchor, override);
+    if (key === heroLayoutKey("cauldron")) {
+      const meshes = heroMeshes.get("cauldron");
+      if (meshes) fitCauldronLiquid(meshes, { scene, cauldron });
+    }
+    return heroLayoutValues(anchors[0]);
+  }
+
+  function getHeroLayoutOverride(key) {
+    return heroLayoutValues(heroLayoutAnchors.get(key)?.[0]);
+  }
+
+  function setHeroLayoutOverride(key, partial = {}) {
+    const current = getHeroLayoutOverride(key);
+    if (!current) return null;
+    return applyHeroLayoutGroup(key, {
+      scaleMul: Number.isFinite(partial.scaleMul) ? partial.scaleMul : current.scaleMul,
+      yOffset: Number.isFinite(partial.yOffset) ? partial.yOffset : current.yOffset,
+    });
+  }
+
+  function resetDressingAnchor(key) {
+    const entry = dressingAnchors.get(key);
+    if (!entry) return;
+    placeDressingAnchor(entry.anchor, entry.placement, key, { dressingAnchors, layoutOverrides: getLayoutOverrides() });
+  }
+
+  function resetHeroLayoutAnchor(key) {
+    return applyHeroLayoutGroup(key, {});
+  }
+
+  function resetLayoutAnchor(key) {
+    if (key.startsWith("hero:")) return resetHeroLayoutAnchor(key);
+    return resetDressingAnchor(key);
+  }
+
+  function resetAllLayoutAnchors() {
+    for (const key of [...dressingAnchors.keys()]) resetDressingAnchor(key);
+    for (const key of heroLayoutAnchors.keys()) resetHeroLayoutAnchor(key);
   }
 
   function focus(action) {
@@ -1530,7 +1716,16 @@ export function createWorkshopScene(engine, canvas, materials) {
     actions,
     getAction: actionForMesh,
     setHighlight,
+    setLayoutHighlight: (anchor) => setHighlight(anchor ? descendantMeshes(anchor) : null),
+    getLayoutAnchor,
+    getLayoutKey,
+    isHeroLayoutAnchor,
     worldFromPointer,
+    worldFromPointerAtHeight,
+    getHeroLayoutOverride,
+    setHeroLayoutOverride,
+    resetLayoutAnchor,
+    resetAllLayoutAnchors,
     nearestStation,
     moveJar,
     resetJar,

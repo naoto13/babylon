@@ -78,6 +78,10 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .notice { position: absolute; left: 50%; bottom: 7.2rem; max-width: min(34rem, calc(100vw - 1.4rem)); margin: 0; padding: .6rem .9rem; transform: translateX(-50%); color: #fff4d0; text-align: center; }
 .modal-scrim { position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(2, 7, 19, .52); pointer-events: auto; }
 .modal-panel { width: min(37rem, 100%); max-height: min(80vh, 48rem); overflow: auto; padding: 1rem 1.1rem; }
+.layout-editor-panel { position: fixed; z-index: 4; top: .75rem; right: clamp(.7rem, 3vw, 2rem); width: min(29rem, calc(100vw - 1.4rem)); padding: .85rem 1rem; }
+.layout-editor-panel h2 { margin-bottom: .35rem; }
+.layout-editor-readout { color: #f5d98f; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.layout-editor-status { min-height: 1.55em; margin-bottom: 0; }
 .journal-list li { padding: .75rem 0; border-bottom: 1px solid rgba(213, 225, 255, .15); }
 .journal-list h3 { margin-top: 0; }
 .toggle-row { display: flex; align-items: center; gap: .6rem; padding: .65rem 0; }
@@ -91,6 +95,7 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
   .order-card { max-height: 43vh; overflow: auto; }
   .brew-summary { bottom: .65rem; }
   .center-panel, .title-panel { margin-top: 5vh; }
+  .layout-editor-panel { top: auto; bottom: .65rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 120ms !important; scroll-behavior: auto !important; }

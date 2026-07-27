@@ -3,11 +3,14 @@ import { appraise, evaluateBrew, judgeDelivery } from "./engine.js";
 import { clearGame, freshGameState, loadGame, saveGame } from "./save.js";
 import { createWorkshopScene } from "./scene.js";
 import { createInteractions } from "./interactions.js";
+import { createLayoutEditor } from "./layout-editor.js";
 import { createUI } from "./ui.js";
 
 const canvas = document.getElementById("workshop-canvas");
 const root = document.getElementById("ui-root");
 const bootError = document.getElementById("boot-error");
+// Read once: this mode is intentionally selected only during page boot.
+const layoutMode = new URLSearchParams(window.location.search).get("layout") === "1";
 const SIMMER_TARGET_SECONDS = Object.freeze({ low: 5, mid: 3.5, high: 2.5 });
 const defaultTechnique = () => ({ stirQuality: 50, simmer: "none" });
 const effectivePourBand = (material, gentleTechnique) => {
@@ -42,7 +45,9 @@ if (window.__babylonLoadFailed || !window.BABYLON) {
 
 function startWorkshop() {
   const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
-  const sceneApi = createWorkshopScene(engine, canvas, MATERIALS);
+  const sceneApi = createWorkshopScene(engine, canvas, MATERIALS, { layoutMode });
+  // The layout editor is the only interactive surface in this mode.
+  if (layoutMode) root.hidden = true;
   const stateForSave = () => state.phase === "TITLE" && canContinue
     ? { ...state, phase: resumePhase }
     : state;
@@ -212,7 +217,7 @@ function startWorkshop() {
     saveAndRender();
   }
 
-  const interactions = createInteractions({
+  const interactions = layoutMode ? createLayoutEditor({ canvas, sceneApi }) : createInteractions({
     canvas,
     sceneApi,
     canInteract: (action) => state.phase === "CRAFT"
