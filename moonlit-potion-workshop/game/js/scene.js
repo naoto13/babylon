@@ -9,6 +9,13 @@ const EFFECT_COLOURS = Object.freeze({
   shift: "#bf86ff",
   none: "#8090a9",
 });
+// 炉の火は温度帯によらず暖色。TEMP_COLOURS(弱火=紫)は薬の温度表現用であり、
+// 火そのものに使うと紫の炎になってしまう。温度は明るさと勢いで表す。
+const HEARTH_COLOURS = Object.freeze({
+  low: "#c2601c",
+  mid: "#ff9a3c",
+  high: "#ffc46a",
+});
 const TEMP_COLOURS = Object.freeze({
   low: "#8570ff",
   mid: "#f4a45d",
@@ -25,7 +32,6 @@ const HERO_ASSETS = Object.freeze({
     size: Object.freeze({ height: 1.15, diameter: 2.05 }),
     action: "cauldron",
     family: "iron",
-    special: Object.freeze({ liquidMouthFit: true }),
   }),
   cuttingBoard: Object.freeze({
     path: "assets/models/cutting-board.glb",
@@ -326,14 +332,19 @@ const hammeredIronMaterialsByScene = new WeakMap();
 const heroStandardMaterialsByScene = new WeakMap();
 const workshopAtmospheresByScene = new WeakMap();
 const paintedBackdropsByScene = new WeakMap();
+const particleTexturesByScene = new WeakMap();
 const HAMMERED_IRON_TEXTURE_SIZE = 512;
 const HAMMERED_IRON_SEED = 0x5eeda11;
+const PARTICLE_TEXTURE_SIZE = 128;
+const PARTICLE_TEXTURE_SEED = 0x6d6f6f6e;
+const CAULDRON_MOUTH_RADIUS = 0.83;
 // 実機チューニング済み: 幅80だと画像中央だけが拡大されボケるため、視野適合の28へ。
 // 首振り端でのわずかな見切れは許容（クリアカラーが近色のため目立たない）。
 const BACKDROP_WIDTH = 28;
 const BACKDROP_HEIGHT = BACKDROP_WIDTH * (941 / 1672);
-// 64 bubbles + 56 steam + 32 dust + the pre-existing 48-particle pour burst = 200.
-const PARTICLE_CAPACITY = Object.freeze({ bubbles: 64, steam: 56, dust: 32, pourBurst: 48 });
+// 64 sparkles + 72 hearth flames + 64 wisps + 96 bubbles + 32 dust + 48 pour droplets = 376.
+// 大きな半透明クアッドではなく小粒子を増やし、過度なオーバードローを避ける。
+const PARTICLE_CAPACITY = Object.freeze({ sparkles: 64, hearthFlame: 72, bubbles: 96, steam: 64, dust: 32, pourBurst: 48 });
 
 const colour3 = (hex) => BABYLON.Color3.FromHexString(hex);
 
@@ -605,37 +616,230 @@ function labeledMaterial(name, label, colour, scene) {
   return result;
 }
 
-function particleTexture(name, scene) {
+function drawSoftParticleBlob(context, x, y, radius, centreAlpha, edgeAlpha = 0) {
+  const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, `rgba(255, 255, 255, ${centreAlpha})`);
+  gradient.addColorStop(0.42, `rgba(246, 250, 255, ${centreAlpha * 0.64})`);
+  gradient.addColorStop(0.78, `rgba(226, 238, 255, ${centreAlpha * 0.16})`);
+  gradient.addColorStop(1, `rgba(214, 231, 255, ${edgeAlpha})`);
+  context.fillStyle = gradient;
+  context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+}
+
+function drawSoftMistTexture(context, size) {
+  drawSoftParticleBlob(context, size / 2, size / 2, size * 0.48, 0.85);
+}
+
+function drawWispTexture(context, size) {
+  const random = mulberry32(PARTICLE_TEXTURE_SEED);
+  for (let index = 0; index < 4; index += 1) {
+    const x = size * (0.3 + (random() * 0.4));
+    const y = size * (0.27 + (random() * 0.46));
+    const radius = size * (0.2 + (random() * 0.1));
+    drawSoftParticleBlob(context, x, y, radius, 0.44 + (random() * 0.14));
+  }
+}
+
+function drawBubbleTexture(context, size) {
+  const centre = size / 2;
+  const radius = size * 0.43;
+  const rim = context.createRadialGradient(centre, centre, 0, centre, centre, radius);
+  rim.addColorStop(0, "rgba(255, 255, 255, 0)");
+  rim.addColorStop(0.62, "rgba(255, 255, 255, 0)");
+  rim.addColorStop(0.72, "rgba(224, 243, 255, 0.1)");
+  rim.addColorStop(0.79, "rgba(243, 253, 255, 0.92)");
+  rim.addColorStop(0.85, "rgba(202, 232, 255, 0.34)");
+  rim.addColorStop(0.95, "rgba(184, 219, 255, 0.04)");
+  rim.addColorStop(1, "rgba(184, 219, 255, 0)");
+  context.fillStyle = rim;
+  context.fillRect(0, 0, size, size);
+
+  const highlightX = size * 0.37;
+  const highlightY = size * 0.33;
+  const highlight = context.createRadialGradient(highlightX, highlightY, 0, highlightX, highlightY, size * 0.105);
+  highlight.addColorStop(0, "rgba(255, 255, 255, 0.96)");
+  highlight.addColorStop(0.32, "rgba(255, 255, 255, 0.7)");
+  highlight.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = highlight;
+  context.fillRect(0, 0, size, size);
+}
+
+function drawDropletTexture(context, size) {
+  const centre = size / 2;
+  context.save();
+  context.translate(centre, centre);
+  context.scale(0.68, 1.2);
+  drawSoftParticleBlob(context, 0, 0, size * 0.35, 0.9);
+  context.restore();
+}
+
+function drawSparkleTexture(context, size) {
+  const centre = size / 2;
+  const ray = size * 0.39;
+  const width = size * 0.045;
+  const glow = context.createRadialGradient(centre, centre, 0, centre, centre, size * 0.2);
+  glow.addColorStop(0, "rgba(255, 255, 255, 1)");
+  glow.addColorStop(0.28, "rgba(255, 255, 255, 0.92)");
+  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = glow;
+  context.fillRect(centre - (size * 0.2), centre - (size * 0.2), size * 0.4, size * 0.4);
+  context.fillStyle = "rgba(255, 255, 255, 0.74)";
+  context.beginPath();
+  context.moveTo(centre - ray, centre);
+  context.lineTo(centre - width, centre - width);
+  context.lineTo(centre, centre - ray);
+  context.lineTo(centre + width, centre - width);
+  context.lineTo(centre + ray, centre);
+  context.lineTo(centre + width, centre + width);
+  context.lineTo(centre, centre + ray);
+  context.lineTo(centre - width, centre + width);
+  context.closePath();
+  context.fill();
+}
+
+function drawFlameTexture(context, size) {
+  const centre = size / 2;
+  const flame = context.createRadialGradient(centre, size * 0.58, 0, centre, size * 0.58, size * 0.42);
+  flame.addColorStop(0, "rgba(255, 255, 255, 1)");
+  flame.addColorStop(0.42, "rgba(255, 255, 255, 0.95)");
+  flame.addColorStop(0.78, "rgba(255, 255, 255, 0.38)");
+  flame.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = flame;
+  context.beginPath();
+  context.moveTo(centre, size * 0.06);
+  context.bezierCurveTo(size * 0.77, size * 0.34, size * 0.83, size * 0.66, centre, size * 0.95);
+  context.bezierCurveTo(size * 0.18, size * 0.68, size * 0.22, size * 0.38, centre, size * 0.06);
+  context.closePath();
+  context.fill();
+}
+
+function createParticleTexture(name, scene, draw) {
+  let texture = null;
   try {
-    const texture = new BABYLON.DynamicTexture(name, { width: 32, height: 32 }, scene, false);
+    texture = new BABYLON.DynamicTexture(name, { width: PARTICLE_TEXTURE_SIZE, height: PARTICLE_TEXTURE_SIZE }, scene, false);
     const context = texture.getContext();
-    context.clearRect(0, 0, 32, 32);
-    context.fillStyle = "white";
-    context.beginPath();
-    context.arc(16, 16, 12, 0, Math.PI * 2);
-    context.fill();
+    if (!context) throw new Error("2D コンテキストを取得できません");
+    context.clearRect(0, 0, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE);
+    draw(context, PARTICLE_TEXTURE_SIZE);
     texture.hasAlpha = true;
     texture.update();
     return texture;
   } catch (error) {
+    texture?.dispose?.();
     console.info(`[atmosphere] ${name} を作成できません: ${String(error?.message ?? error)}`);
     return null;
   }
 }
 
-function createSoftParticleSystem(name, capacity, scene) {
+function particleTextures(scene) {
+  const cached = particleTexturesByScene.get(scene);
+  if (cached) return cached;
+
+  const textures = {
+    softMist: createParticleTexture("cauldron-particle-soft-mist", scene, drawSoftMistTexture),
+    wisp: createParticleTexture("cauldron-particle-wisp", scene, drawWispTexture),
+    bubble: createParticleTexture("cauldron-particle-bubble", scene, drawBubbleTexture),
+    droplet: createParticleTexture("cauldron-particle-droplet", scene, drawDropletTexture),
+    sparkle: createParticleTexture("cauldron-particle-sparkle", scene, drawSparkleTexture),
+    flame: createParticleTexture("hearth-particle-flame", scene, drawFlameTexture),
+  };
+  particleTexturesByScene.set(scene, textures);
+  scene.onDisposeObservable.addOnce(() => particleTexturesByScene.delete(scene));
+  return textures;
+}
+
+function createSoftParticleSystem(name, capacity, textureKind, scene) {
   if (typeof BABYLON.ParticleSystem !== "function") return null;
-  const texture = particleTexture(`${name}-texture`, scene);
+  const texture = particleTextures(scene)[textureKind];
   if (!texture) return null;
   try {
     const system = new BABYLON.ParticleSystem(name, capacity, scene);
     system.particleTexture = texture;
     return system;
   } catch (error) {
-    texture.dispose?.();
     console.info(`[atmosphere] ${name} を開始できません: ${String(error?.message ?? error)}`);
     return null;
   }
+}
+
+function potionParticleColour(hex, alpha) {
+  const potion = colour3(hex);
+  return new BABYLON.Color4(
+    (0.91 * 0.65) + (potion.r * 0.35),
+    (0.94 * 0.65) + (potion.g * 0.35),
+    (0.98 * 0.65) + (potion.b * 0.35),
+    alpha,
+  );
+}
+
+function addParticleTintGradient(system, hex, alpha, opaqueUntil = null) {
+  const full = potionParticleColour(hex, alpha);
+  const transparent = full.clone();
+  transparent.a = 0;
+  system.color1 = full;
+  system.color2 = full;
+  if (typeof system.addColorGradient !== "function") return { system, full, transparent };
+  system.addColorGradient(0, transparent);
+  system.addColorGradient(0.12, full);
+  if (opaqueUntil !== null) system.addColorGradient(opaqueUntil, full);
+  system.addColorGradient(1, transparent);
+  return { system, full, transparent };
+}
+
+function addSparkleTintGradient(system, hex, alpha) {
+  const full = potionParticleColour(hex, alpha);
+  const peak = full.clone();
+  peak.a = Math.min(1, alpha * 1.35);
+  const transparent = full.clone();
+  transparent.a = 0;
+  system.color1 = full;
+  system.color2 = full;
+  if (typeof system.addColorGradient !== "function") return { system, full, peak, transparent };
+  system.addColorGradient(0, transparent);
+  system.addColorGradient(0.22, full);
+  system.addColorGradient(0.5, peak);
+  system.addColorGradient(0.76, full);
+  system.addColorGradient(1, transparent);
+  return { system, full, peak, transparent };
+}
+
+function setParticleTint(tint, hex, alpha) {
+  if (!tint) return;
+  const full = potionParticleColour(hex, alpha);
+  tint.full.copyFrom(full);
+  if (tint.peak) {
+    tint.peak.copyFrom(full);
+    tint.peak.a = Math.min(1, alpha * 1.35);
+  }
+  tint.transparent.copyFrom(full);
+  tint.transparent.a = 0;
+  // 粒子の色 LUT は状態変更時だけ再同期する。レンダーループでは再構築しない。
+  tint.system.forceRefreshGradients?.();
+}
+
+function createCauldronCylinderEmitter(system, height, direction1, direction2) {
+  system.emitter = new BABYLON.Vector3(0, height, 0.3);
+  if (typeof system.createDirectedCylinderEmitter === "function") {
+    system.createDirectedCylinderEmitter(CAULDRON_MOUTH_RADIUS, 0.045, 1, direction1, direction2);
+    return true;
+  }
+  if (typeof system.createCylinderEmitter === "function") {
+    system.createCylinderEmitter(CAULDRON_MOUTH_RADIUS, 0.045, 1, 0.08);
+    system.direction1 = direction1;
+    system.direction2 = direction2;
+    return true;
+  }
+  console.info("[atmosphere] 円形パーティクルエミッタを使用できません");
+  return false;
+}
+
+function createCauldronParticleSystem(name, capacity, textureKind, scene, height, direction1, direction2) {
+  const system = createSoftParticleSystem(name, capacity, textureKind, scene);
+  if (!system) return null;
+  if (createCauldronCylinderEmitter(system, height, direction1, direction2)) return system;
+  // 角形の代替は口の輪郭を壊すため、このレイヤーだけ安全に省略する。
+  system.dispose?.(false);
+  return null;
 }
 
 function createPaintedBackdrop(scene) {
@@ -712,8 +916,24 @@ function addGlowMesh(glow, mesh) {
   else glow.includedOnlyMeshes.push(mesh);
 }
 
+function addHearthFlameGradients(system) {
+  const yellowWhite = new BABYLON.Color4(1, 0.94, 0.66, 0);
+  const brightYellow = new BABYLON.Color4(1, 0.82, 0.27, 0.98);
+  const orange = new BABYLON.Color4(1, 0.34, 0.08, 0.78);
+  const emberRed = new BABYLON.Color4(0.78, 0.08, 0.025, 0.4);
+  const transparentRed = emberRed.clone();
+  transparentRed.a = 0;
+  system.color1 = brightYellow;
+  system.color2 = orange;
+  if (typeof system.addColorGradient !== "function") return;
+  system.addColorGradient(0, yellowWhite);
+  system.addColorGradient(0.14, brightYellow);
+  system.addColorGradient(0.52, orange);
+  system.addColorGradient(0.82, emberRed);
+  system.addColorGradient(1, transparentRed);
+}
+
 function createWorkshopAtmosphere(scene, {
-  liquid,
   hearthFlame,
   lensRim,
   prefersReducedMotion,
@@ -726,7 +946,6 @@ function createWorkshopAtmosphere(scene, {
     if (typeof BABYLON.GlowLayer === "function") {
       glow = new BABYLON.GlowLayer("workshop-selective-glow", scene, { blurKernelSize: 32 });
       glow.intensity = 0.5;
-      addGlowMesh(glow, liquid);
       addGlowMesh(glow, hearthFlame);
       addGlowMesh(glow, lensRim);
     }
@@ -744,36 +963,116 @@ function createWorkshopAtmosphere(scene, {
   ];
   for (const candle of candles) addGlowMesh(glow, candle.flame);
 
-  const steam = createSoftParticleSystem("cauldron-steam", PARTICLE_CAPACITY.steam, scene);
+  const particleRateMultiplier = prefersReducedMotion ? 0.35 : 1;
+  const steamDrift = prefersReducedMotion ? 0 : 0.08;
+  const sparkles = createCauldronParticleSystem(
+    "cauldron-sparkles",
+    PARTICLE_CAPACITY.sparkles,
+    "sparkle",
+    scene,
+    1.615,
+    new BABYLON.Vector3(-steamDrift * 0.38, 0.22, -steamDrift * 0.38),
+    new BABYLON.Vector3(steamDrift * 0.38, 0.52, steamDrift * 0.38),
+  );
+  const sparkleTint = sparkles ? addSparkleTintGradient(sparkles, EFFECT_COLOURS.none, 0.78) : null;
+  let sparkleBaseRate = 4 * particleRateMultiplier;
+  let sparkleIrregularity = 0;
+  if (sparkles) {
+    // 注意: Babylon の addSizeGradient は倍率ではなく絶対サイズ（particle.size を上書きし
+    // minSize/maxSize を無視する）。ここも 0.01〜0.03 の実サイズだけを渡す。
+    sparkles.minSize = 0.01;
+    sparkles.maxSize = 0.03;
+    sparkles.minLifeTime = 0.62;
+    sparkles.maxLifeTime = 1.16;
+    sparkles.addSizeGradient(0, 0.01);
+    sparkles.addSizeGradient(0.48, 0.03);
+    sparkles.addSizeGradient(1, 0.012);
+    sparkles.addDragGradient(0, 0.02);
+    sparkles.addDragGradient(1, 0.16);
+    sparkles.minInitialRotation = 0;
+    sparkles.maxInitialRotation = 0;
+    sparkles.emitRate = sparkleBaseRate;
+    sparkles.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+    sparkles.start();
+  }
+
+  // 既存名 cauldron-steam は外部の調整・計測の参照先として維持する。
+  const steam = createCauldronParticleSystem(
+    "cauldron-steam",
+    PARTICLE_CAPACITY.steam,
+    "wisp",
+    scene,
+    1.63,
+    new BABYLON.Vector3(-steamDrift, 0.34, -steamDrift),
+    new BABYLON.Vector3(steamDrift, 0.62, steamDrift),
+  );
+  const steamTint = steam ? addParticleTintGradient(steam, EFFECT_COLOURS.none, 0.5, 0.68) : null;
   if (steam) {
-    steam.emitter = new BABYLON.Vector3(0, 1.63, 0.3);
-    steam.minEmitBox = new BABYLON.Vector3(-0.46, 0, -0.46);
-    steam.maxEmitBox = new BABYLON.Vector3(0.46, 0.06, 0.46);
-    steam.color1 = new BABYLON.Color4(0.72, 0.83, 1, 0.2);
-    steam.color2 = new BABYLON.Color4(0.48, 0.63, 0.9, 0.04);
-    steam.minSize = 0.14;
-    steam.maxSize = 0.3;
-    steam.minLifeTime = 1.15;
-    steam.maxLifeTime = 2.1;
-    steam.direction1 = new BABYLON.Vector3(-0.08, 0.56, -0.08);
-    steam.direction2 = new BABYLON.Vector3(0.08, 1.02, 0.08);
-    steam.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+    steam.minSize = 0.12;
+    steam.maxSize = 0.25;
+    steam.minLifeTime = 1.8;
+    steam.maxLifeTime = 3.1;
+    steam.addSizeGradient(0, 0.13);
+    steam.addSizeGradient(0.58, 0.26);
+    steam.addSizeGradient(1, 0.4);
+    steam.addDragGradient(0, 0.01);
+    steam.addDragGradient(0.62, 0.12);
+    steam.addDragGradient(1, 0.24);
+    steam.minInitialRotation = -Math.PI;
+    steam.maxInitialRotation = Math.PI;
+    steam.minAngularSpeed = prefersReducedMotion ? 0 : -0.22;
+    steam.maxAngularSpeed = prefersReducedMotion ? 0 : 0.22;
+    steam.preWarmCycles = 10;
+    steam.preWarmStepOffset = 0.12;
+    steam.emitRate = 24 * particleRateMultiplier;
+    steam.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
     steam.start();
   }
 
-  const dust = createSoftParticleSystem("moonlight-dust", PARTICLE_CAPACITY.dust, scene);
+  const hearthFire = createSoftParticleSystem("hearth-fire", PARTICLE_CAPACITY.hearthFlame, "flame", scene);
+  if (hearthFire) {
+    hearthFire.emitter = hearthFlame;
+    hearthFire.minEmitBox = new BABYLON.Vector3(-0.24, 0.02, -0.18);
+    hearthFire.maxEmitBox = new BABYLON.Vector3(0.24, 0.08, 0.18);
+    hearthFire.minSize = 0.08;
+    hearthFire.maxSize = 0.15;
+    hearthFire.minLifeTime = 0.48;
+    hearthFire.maxLifeTime = 0.92;
+    hearthFire.addSizeGradient(0, 0.12);
+    hearthFire.addSizeGradient(0.55, 0.086);
+    hearthFire.addSizeGradient(1, 0.018);
+    hearthFire.addDragGradient(0, 0.03);
+    hearthFire.addDragGradient(1, 0.18);
+    hearthFire.direction1 = new BABYLON.Vector3(prefersReducedMotion ? 0 : -0.14, 1, -0.05);
+    hearthFire.direction2 = new BABYLON.Vector3(prefersReducedMotion ? 0 : 0.14, 1.18, 0.05);
+    hearthFire.gravity = new BABYLON.Vector3(0, -0.22, 0);
+    hearthFire.minInitialRotation = 0;
+    hearthFire.maxInitialRotation = 0;
+    addHearthFlameGradients(hearthFire);
+    hearthFire.emitRate = 18 * particleRateMultiplier;
+    hearthFire.minEmitPower = 0.78;
+    hearthFire.maxEmitPower = 1.02;
+    hearthFire.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+    hearthFire.start();
+  }
+
+  const dust = createSoftParticleSystem("moonlight-dust", PARTICLE_CAPACITY.dust, "softMist", scene);
   if (dust) {
     dust.emitter = new BABYLON.Vector3(0, 3.8, 4.2);
     dust.minEmitBox = new BABYLON.Vector3(-1.25, -1.45, -0.18);
     dust.maxEmitBox = new BABYLON.Vector3(1.25, 1.1, 0.18);
-    dust.color1 = new BABYLON.Color4(0.76, 0.86, 1, 0.22);
-    dust.color2 = new BABYLON.Color4(0.48, 0.6, 0.9, 0.04);
+    addParticleTintGradient(dust, EFFECT_COLOURS.none, 0.2);
     dust.minSize = 0.018;
     dust.maxSize = 0.045;
     dust.minLifeTime = 5;
     dust.maxLifeTime = 8;
     dust.direction1 = new BABYLON.Vector3(-0.035, -0.015, -0.025);
     dust.direction2 = new BABYLON.Vector3(0.035, 0.025, 0.025);
+    dust.addSizeGradient(0, 0.018);
+    dust.addSizeGradient(0.5, 0.032);
+    dust.addSizeGradient(1, 0.022);
+    dust.addDragGradient(0, 0.01);
+    dust.addDragGradient(1, 0.06);
     dust.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
     dust.emitRate = prefersReducedMotion ? 0 : 3;
     dust.start();
@@ -784,12 +1083,33 @@ function createWorkshopAtmosphere(scene, {
       addGlowMesh(glow, mesh);
     },
     setTemperature(tempBand, simmerActive) {
-      if (!steam) return;
-      const rate = tempBand === "low" ? 3 : tempBand === "high" ? 18 : 9;
-      steam.emitRate = rate * (simmerActive ? 1.2 : 1) * (prefersReducedMotion ? 0.35 : 1);
+      const rate = tempBand === "low" ? 10 : tempBand === "high" ? 34 : 20;
+      const simmerMultiplier = simmerActive ? 1.2 : 1;
+      if (steam) steam.emitRate = rate * 2.1 * simmerMultiplier * particleRateMultiplier;
+      if (hearthFire) {
+        const fireRate = tempBand === "low" ? 10 : tempBand === "high" ? 28 : 18;
+        const firePower = tempBand === "low" ? 0.64 : tempBand === "high" ? 1.16 : 0.88;
+        hearthFire.emitRate = fireRate * simmerMultiplier * particleRateMultiplier;
+        hearthFire.minEmitPower = firePower;
+        hearthFire.maxEmitPower = firePower + 0.26;
+      }
+    },
+    setPotionColour(hex) {
+      setParticleTint(sparkleTint, hex, 0.78);
+      setParticleTint(steamTint, hex, 0.5);
+    },
+    setPotionState({ itemCount = 0, stability = 70, overmixed = false } = {}) {
+      const ingredientFactor = Math.min(4, Math.max(0, itemCount));
+      sparkleBaseRate = (4 + (ingredientFactor * 5)) * particleRateMultiplier;
+      sparkleIrregularity = Math.min(0.72, ((100 - stability) * 0.006) + (overmixed ? 0.12 : 0));
+      if (sparkles) sparkles.emitRate = sparkleBaseRate;
     },
     tick(clock) {
-      // Pure clock-based sin sums keep candle flicker reproducible without per-frame allocations.
+      // Pure clock-based sin sums keep flicker reproducible without per-frame allocations.
+      if (sparkles && sparkleIrregularity > 0) {
+        const irregular = (Math.sin(clock * 6.7) * 0.42) + (Math.sin(clock * 13.1) * 0.24) + (Math.sin(clock * 19.9) * 0.13);
+        sparkles.emitRate = sparkleBaseRate * (1 + (irregular * sparkleIrregularity));
+      }
       for (let index = 0; index < candles.length; index += 1) {
         const candle = candles[index];
         const phase = index * 1.73;
@@ -847,21 +1167,6 @@ function importedRoots(meshes) {
     roots.add(root);
   }
   return roots;
-}
-
-function importedMouthRadius(meshes, centre, minY) {
-  let radius = 0;
-  for (const mesh of meshes) {
-    const positions = mesh.getVerticesData?.(BABYLON.VertexBuffer.PositionKind);
-    if (!positions) continue;
-    mesh.computeWorldMatrix(true);
-    const matrix = mesh.getWorldMatrix();
-    for (let i = 0; i < positions.length; i += 3) {
-      const world = BABYLON.Vector3.TransformCoordinates(new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]), matrix);
-      if (world.y > minY) radius = Math.max(radius, Math.hypot(world.x - centre.x, world.z - centre.z));
-    }
-  }
-  return radius;
 }
 
 function logHeroFallback(name, reason) {
@@ -986,17 +1291,6 @@ function prepareJarHeroClones(name, prototypeAnchor, context) {
   return clones;
 }
 
-function fitCauldronLiquid(meshes, context) {
-  const liquid = context.scene.getMeshByName("cauldron-liquid");
-  if (!liquid) return;
-  const mouthRadius = importedMouthRadius(meshes, context.cauldron.position, 1.45);
-  if (mouthRadius <= 0.2) return;
-  const fit = BABYLON.Scalar.Clamp((mouthRadius * 0.88) / 0.83, 0.35, 1);
-  liquid.scaling.x = fit;
-  liquid.scaling.y = fit;
-  liquid.metadata = { ...(liquid.metadata ?? {}), baseY: 1.52 };
-}
-
 async function loadHeroProp(name, config, context) {
   const { scene, actions } = context;
   if (window.__babylonLoaderLoadFailed || !BABYLON.SceneLoader?.ImportMeshAsync) {
@@ -1043,13 +1337,11 @@ async function loadHeroProp(name, config, context) {
         fallback.setEnabled(false);
       }
     } else {
-      context.heroMeshes.set(name, meshes);
       // Visual scale is a parent-layer multiplier after fit normalisation.
-      // The cauldron fit below therefore measures the final rendered mouth.
       registerHeroLayoutAnchor(name, heroAnchor, context);
-      if (config.special?.liquidMouthFit) fitCauldronLiquid(meshes, context);
       for (const fallback of fallbacks) fallback.setEnabled(false);
       context.heroAnchors.set(name, heroAnchor);
+      if (name === "cauldron") fitCauldronInterior(meshes, context.scene);
     }
   } catch (error) {
     for (const mesh of meshes) {
@@ -1059,6 +1351,37 @@ async function loadHeroProp(name, config, context) {
     heroAnchor?.setEnabled(false);
     logHeroFallback(name, error);
   }
+}
+
+// 取り込んだ釜の口の高さ・半径・中心を頂点から実測し、暗い空洞をその内側へ収める。
+// 上端は縁の裏へ隠して、空洞の輪郭が直線として見えないようにする。
+function fitCauldronInterior(meshes, scene) {
+  const interior = scene.getMeshByName("cauldron-interior");
+  if (!interior) return;
+  let topY = -Infinity;
+  const points = [];
+  for (const mesh of meshes) {
+    const positions = mesh.getVerticesData?.(BABYLON.VertexBuffer.PositionKind);
+    if (!positions) continue;
+    mesh.computeWorldMatrix(true);
+    const matrix = mesh.getWorldMatrix();
+    for (let i = 0; i < positions.length; i += 3) {
+      const world = BABYLON.Vector3.TransformCoordinates(
+        new BABYLON.Vector3(positions[i], positions[i + 1], positions[i + 2]), matrix,
+      );
+      points.push(world);
+      if (world.y > topY) topY = world.y;
+    }
+  }
+  const rim = points.filter((p) => p.y > topY - 0.08);
+  if (rim.length < 8) return;
+  const centreX = rim.reduce((sum, p) => sum + p.x, 0) / rim.length;
+  const centreZ = rim.reduce((sum, p) => sum + p.z, 0) / rim.length;
+  const radius = rim.reduce((max, p) => Math.max(max, Math.hypot(p.x - centreX, p.z - centreZ)), 0);
+  if (radius < 0.1) return;
+  const height = 0.9;
+  interior.scaling.set(radius / 0.75 * 0.96, 1, radius / 0.75 * 0.96);
+  interior.position.set(centreX, topY - 0.14 - height / 2, centreZ);
 }
 
 function loadHeroAssets(context) {
@@ -1227,8 +1550,11 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
   moon.position = new BABYLON.Vector3(2, 8, -4);
   moon.diffuse = colour3("#809eff");
   moon.intensity = 0.82;
-  const hearth = new BABYLON.PointLight("hearth", new BABYLON.Vector3(0, 1.2, 0.25), scene);
-  hearth.diffuse = colour3(TEMP_COLOURS.mid);
+  // The visible ember bed needs to clear the tabletop (top: y=0.575) while
+  // remaining tucked under the cauldron's front edge for the fixed camera.
+  const hearthPosition = new BABYLON.Vector3(0, 0.58, -0.58);
+  const hearth = new BABYLON.PointLight("hearth", hearthPosition.clone(), scene);
+  hearth.diffuse = colour3(HEARTH_COLOURS.mid);
   hearth.intensity = 2.1;
   hearth.range = 8;
   const fill = new BABYLON.HemisphericLight("night-fill", new BABYLON.Vector3(0, 1, 0), scene);
@@ -1243,7 +1569,6 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
   const actions = new Map();
   const heroAnchors = new Map();
   const heroLayoutAnchors = new Map();
-  const heroMeshes = new Map();
   const layoutOverrides = getLayoutOverrides();
   const wood = material("wood", "#47322d", scene);
   const woodLight = material("wood-light", "#725040", scene);
@@ -1281,21 +1606,25 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
   const rimMaterial = material("cauldron-rim", "#c59b54", scene);
   rim.material = rimMaterial;
   rim.isPickable = false;
-  const liquid = BABYLON.MeshBuilder.CreateDisc("cauldron-liquid", { radius: 0.83, tessellation: 32 }, scene);
-  liquid.rotation.x = Math.PI / 2;
-  liquid.position = new BABYLON.Vector3(0, 1.59, 0.3);
-  const liquidMaterial = material("liquid", EFFECT_COLOURS.none, scene, "#203049");
-  liquidMaterial.alpha = 0.9;
-  liquid.material = liquidMaterial;
-  liquid.isPickable = false;
-  // The original flame sat inside the pot silhouette from the fixed camera.
-  // Keep the hearth light at the pot, but move its interactive flame in front.
+  // 釜の中身は「暗い空洞」として見せる。水平な面ではなく内側に置いた筒なのは、
+  // カメラが口とほぼ同じ高さにあり、水平面は真横から見えて機能しないため。
+  // 取り込みモデルの明るい内壁を隠す役目も持つ（内壁の斑模様が水面に見えてしまう）。
+  const cauldronInterior = BABYLON.MeshBuilder.CreateCylinder("cauldron-interior", {
+    diameterTop: 1.5, diameterBottom: 1.06, height: 0.9, tessellation: 36,
+  }, scene);
+  cauldronInterior.position = new BABYLON.Vector3(0, 1.15, 0.3);
+  const cauldronInteriorMaterial = material("cauldron-interior", "#0f1526", scene, "#05080f");
+  cauldronInterior.material = cauldronInteriorMaterial;
+  cauldronInterior.isPickable = false;
+  // The ember bed remains the simmer action target, with a shallow silhouette
+  // that stays visible below the pot instead of reading as a floating cone.
   const flame = makeAction(
-    BABYLON.MeshBuilder.CreateCylinder("hearth-flame", { diameterTop: 0.25, diameterBottom: 0.9, height: 0.9, tessellation: 8 }, scene),
-    { kind: "flame", label: "煮込み：押し続ける", focus: new BABYLON.Vector3(0, 0.78, -0.88) }, actions,
+    BABYLON.MeshBuilder.CreateSphere("hearth-flame", { diameter: 0.76, segments: 12 }, scene),
+    { kind: "flame", label: "煮込み：押し続ける", focus: hearthPosition.clone() }, actions,
   );
-  flame.position = new BABYLON.Vector3(0, 0.78, -0.88);
-  const flameMaterial = material("flame", TEMP_COLOURS.mid, scene, TEMP_COLOURS.mid);
+  flame.position.copyFrom(hearthPosition);
+  flame.scaling.set(1, 0.18, 0.72);
+  const flameMaterial = material("hearth-embers", "#a33c1a", scene, HEARTH_COLOURS.mid);
   flame.material = flameMaterial;
 
   const board = makeAction(
@@ -1413,7 +1742,6 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     cauldron,
     heroAnchors,
     heroLayoutAnchors,
-    heroMeshes,
     layoutOverrides,
     layoutMode,
   });
@@ -1423,7 +1751,6 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
   highlight.outerGlow = false;
   highlight.innerGlow = true;
   const atmosphere = createWorkshopAtmosphere(scene, {
-    liquid,
     hearthFlame: flame,
     lensRim: lensGlowRim,
     prefersReducedMotion,
@@ -1437,47 +1764,58 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     layoutOverrides,
   });
   let highlighted = [];
-  let liquidStability = 70;
-  let liquidOvermixed = false;
   let currentTemp = "mid";
-  let baseBubbleRate = 12;
+  let currentPotionColour = EFFECT_COLOURS.none;
+  let baseBubbleRate = 30;
   let simmerActive = false;
   let simmerInWindow = false;
-  let liquidClock = 0;
+  let sceneClock = 0;
   let focusTarget = null;
   let focusOrigin = null;
   let focusProgress = 0;
   const rimGlowColour = colour3("#f6d987");
   const black = BABYLON.Color3.Black();
 
-  const bubble = createSoftParticleSystem("cauldron-bubbles", PARTICLE_CAPACITY.bubbles, scene);
+  const bubbleDrift = prefersReducedMotion ? 0 : 0.08;
+  const bubbleRateMultiplier = prefersReducedMotion ? 0.35 : 1;
+  const bubble = createCauldronParticleSystem(
+    "cauldron-bubbles",
+    PARTICLE_CAPACITY.bubbles,
+    "bubble",
+    scene,
+    1.605,
+    new BABYLON.Vector3(-bubbleDrift, 0.14, -bubbleDrift),
+    new BABYLON.Vector3(bubbleDrift, 0.34, bubbleDrift),
+  );
+  const bubbleTint = bubble ? addParticleTintGradient(bubble, currentPotionColour, 0.95, 0.9) : null;
   if (bubble) {
-    bubble.emitter = new BABYLON.Vector3(0, 1.59, 0.3);
-    bubble.minEmitBox = new BABYLON.Vector3(-0.65, 0, -0.65);
-    bubble.maxEmitBox = new BABYLON.Vector3(0.65, 0.05, 0.65);
-    bubble.color1 = new BABYLON.Color4(0.92, 0.96, 1, 0.65);
-    bubble.color2 = new BABYLON.Color4(0.6, 0.78, 1, 0.35);
-    bubble.minSize = 0.025;
-    bubble.maxSize = 0.085;
-    bubble.minLifeTime = 0.45;
-    bubble.maxLifeTime = 0.9;
-    bubble.direction1 = new BABYLON.Vector3(-0.1, 0.7, -0.1);
-    bubble.direction2 = new BABYLON.Vector3(0.1, 1.25, 0.1);
-    bubble.emitRate = 12;
+    bubble.minSize = 0.018;
+    bubble.maxSize = 0.055;
+    bubble.minLifeTime = 0.58;
+    bubble.maxLifeTime = 1.05;
+    bubble.addSizeGradient(0, 0.016);
+    bubble.addSizeGradient(0.62, 0.032);
+    bubble.addSizeGradient(0.86, 0.042);
+    bubble.addSizeGradient(0.94, 0.055);
+    bubble.addSizeGradient(1, 0.004);
+    bubble.addDragGradient(0, 0.01);
+    bubble.addDragGradient(0.64, 0.08);
+    bubble.addDragGradient(1, 0.2);
+    bubble.emitRate = 30 * bubbleRateMultiplier;
     bubble.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
     bubble.start();
   }
 
+  function setBubbleEmitRate(rate) {
+    if (bubble) bubble.emitRate = rate * bubbleRateMultiplier;
+  }
+
   scene.onBeforeRenderObservable.add(() => {
     const dt = engine.getDeltaTime() / 1000;
-    liquidClock += dt;
-    // Lower stability makes the disc visibly less calm; overmixing adds a small haze pulse.
-    const waveAmplitude = 0.006 + (100 - liquidStability) * 0.00032 + (liquidOvermixed ? 0.018 : 0);
-    liquid.position.y = (liquid.metadata?.baseY ?? 1.59) + Math.sin(liquidClock * 3.2) * waveAmplitude;
-    liquid.rotation.z = Math.sin(liquidClock * 1.7) * waveAmplitude * 4;
-    atmosphere.tick(liquidClock);
+    sceneClock += dt;
+    atmosphere.tick(sceneClock);
     if (simmerActive && simmerInWindow && !prefersReducedMotion) {
-      rimGlowColour.scaleToRef(0.62 + Math.sin(liquidClock * 10) * 0.22, rimMaterial.emissiveColor);
+      rimGlowColour.scaleToRef(0.62 + Math.sin(sceneClock * 10) * 0.22, rimMaterial.emissiveColor);
     }
     if (focusTarget) {
       focusProgress = Math.min(1, focusProgress + dt * (prefersReducedMotion ? 9 : 4.8));
@@ -1494,13 +1832,13 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
 
   function setTemperature(tempBand) {
     currentTemp = tempBand;
-    const colour = TEMP_COLOURS[tempBand] ?? TEMP_COLOURS.mid;
-    hearth.diffuse = colour3(colour);
+    const hearthColour = HEARTH_COLOURS[tempBand] ?? HEARTH_COLOURS.mid;
+    hearth.diffuse = colour3(hearthColour);
     hearth.intensity = tempBand === "low" ? 1.3 : tempBand === "high" ? 3.1 : 2.1;
-    flameMaterial.diffuseColor = colour3(colour);
-    flameMaterial.emissiveColor = colour3(colour);
-    baseBubbleRate = tempBand === "low" ? 3 : tempBand === "high" ? 30 : 12;
-    if (!simmerActive && bubble) bubble.emitRate = baseBubbleRate;
+    flameMaterial.diffuseColor = colour3(hearthColour);
+    flameMaterial.emissiveColor = colour3(hearthColour);
+    baseBubbleRate = tempBand === "low" ? 10 : tempBand === "high" ? 64 : 30;
+    if (!simmerActive) setBubbleEmitRate(baseBubbleRate);
     atmosphere.setTemperature(tempBand, simmerActive);
   }
 
@@ -1508,31 +1846,40 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     const effect = result
       ? Object.entries(result.effects).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "none"
       : dominantEffect(items);
-    liquidStability = result?.stability ?? 70;
-    liquidOvermixed = stirLaps > 6;
-    liquidMaterial.diffuseColor = colour3(EFFECT_COLOURS[effect] ?? EFFECT_COLOURS.none);
-    liquidMaterial.emissiveColor = colour3(EFFECT_COLOURS[effect] ?? EFFECT_COLOURS.none).scale(0.22 + (liquidOvermixed ? 0.08 : 0));
+    const stability = result?.stability ?? 70;
+    const overmixed = stirLaps > 6;
+    currentPotionColour = EFFECT_COLOURS[effect] ?? EFFECT_COLOURS.none;
+    atmosphere.setPotionColour(currentPotionColour);
+    atmosphere.setPotionState({ itemCount: items.length, stability, overmixed });
+    setParticleTint(bubbleTint, currentPotionColour, 0.95);
     setTemperature(tempBand);
   }
 
   function playPourBurst() {
-    const burst = createSoftParticleSystem(`pour-burst-${performance.now()}`, PARTICLE_CAPACITY.pourBurst, scene);
+    const burst = createSoftParticleSystem(`pour-burst-${performance.now()}`, PARTICLE_CAPACITY.pourBurst, "droplet", scene);
     if (!burst) return;
     burst.emitter = new BABYLON.Vector3(0, 1.72, 0.3);
     burst.minEmitBox = BABYLON.Vector3.Zero();
     burst.maxEmitBox = BABYLON.Vector3.Zero();
-    burst.color1 = new BABYLON.Color4(0.86, 0.9, 1, 0.95);
-    burst.color2 = new BABYLON.Color4(0.45, 0.7, 1, 0.2);
+    addParticleTintGradient(burst, currentPotionColour, 0.9, 0.82);
     burst.minSize = 0.04;
     burst.maxSize = 0.12;
     burst.minLifeTime = 0.25;
     burst.maxLifeTime = 0.55;
-    burst.direction1 = new BABYLON.Vector3(-0.6, 0.2, -0.6);
-    burst.direction2 = new BABYLON.Vector3(0.6, 1.1, 0.6);
-    burst.manualEmitCount = 28;
+    burst.addSizeGradient(0, 0.05);
+    burst.addSizeGradient(0.55, 0.1);
+    burst.addSizeGradient(0.88, 0.07);
+    burst.addSizeGradient(1, 0.012);
+    burst.addDragGradient(0, 0.02);
+    burst.addDragGradient(1, 0.16);
+    const pourDrift = prefersReducedMotion ? 0 : 0.6;
+    burst.direction1 = new BABYLON.Vector3(-pourDrift, 0.2, -pourDrift);
+    burst.direction2 = new BABYLON.Vector3(pourDrift, 1.1, pourDrift);
+    burst.manualEmitCount = prefersReducedMotion ? 16 : 28;
     burst.targetStopDuration = 0.04;
     burst.start();
-    window.setTimeout(() => burst.dispose(), 850);
+    // 共有ドロップレットテクスチャは次の注ぎ込みにも使うため破棄しない。
+    window.setTimeout(() => burst.dispose(false), 850);
   }
 
   function setJarPouring(materialId, pouring) {
@@ -1546,12 +1893,12 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     simmerInWindow = active && Math.abs(elapsed - targetSeconds) <= perfectWindow;
     atmosphere.setTemperature(currentTemp, active);
     if (!active) {
-      if (bubble) bubble.emitRate = baseBubbleRate;
+      setBubbleEmitRate(baseBubbleRate);
       rimMaterial.emissiveColor.copyFrom(black);
       return;
     }
     const approach = targetSeconds > 0 ? BABYLON.Scalar.Clamp(elapsed / targetSeconds, 0, 1) : 1;
-    if (bubble) bubble.emitRate = baseBubbleRate + 9 + approach * 48;
+    setBubbleEmitRate(baseBubbleRate + 9 + approach * 48);
     if (simmerInWindow) rimGlowColour.scaleToRef(0.8, rimMaterial.emissiveColor);
     else rimMaterial.emissiveColor.copyFrom(black);
   }
@@ -1643,10 +1990,6 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     const anchors = heroLayoutAnchors.get(key);
     if (!anchors?.length) return null;
     for (const anchor of anchors) applyHeroLayoutOverride(anchor, override);
-    if (key === heroLayoutKey("cauldron")) {
-      const meshes = heroMeshes.get("cauldron");
-      if (meshes) fitCauldronLiquid(meshes, { scene, cauldron });
-    }
     return heroLayoutValues(anchors[0]);
   }
 
