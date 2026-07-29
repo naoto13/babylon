@@ -58,6 +58,7 @@ from build_mpfb_hero import (  # noqa: E402
 
 
 KINDS = ("shooter", "thief", "boss")
+REQUIRED_ACTIONS = {"Idle", "Move", "Attack", "Hit", "Death"}
 
 
 def create_engraving_normal_texture(
@@ -208,31 +209,37 @@ def load_baked_mpfb_foundation(kind: str):
 def palette(kind: str) -> dict[str, bpy.types.Material]:
     values = {
         "shooter": {
-            "cloth": (0.009, 0.006, 0.022),
-            "fabric": (0.045, 0.025, 0.105),
-            "armour": (0.07, 0.045, 0.13),
-            "metal": (0.022, 0.016, 0.038),
-            "trim": (0.55, 0.31, 0.085),
-            "glow": (0.18, 0.012, 0.48),
-            "emission": (0.52, 0.025, 0.92),
+            # 黒は照明で作る。albedo は旧値の約 3.5 倍にして彫金と布目を残す。
+            "cloth": (0.049, 0.035, 0.095),
+            "fabric": (0.140, 0.084, 0.287),
+            "armour": (0.184, 0.140, 0.302),
+            "metal": (0.070, 0.063, 0.119),
+            "trim": (0.31, 0.35, 0.43),
+            "trim_high": (0.36, 0.40, 0.49),
+            "glow": (0.24, 0.018, 0.34),
+            "emission": (0.70, 0.030, 0.85),
         },
         "thief": {
-            "cloth": (0.004, 0.008, 0.014),
-            "fabric": (0.015, 0.038, 0.055),
-            "armour": (0.025, 0.052, 0.07),
-            "metal": (0.008, 0.021, 0.031),
-            "trim": (0.5, 0.28, 0.075),
-            "glow": (0.0, 0.22, 0.48),
-            "emission": (0.0, 0.68, 1.0),
+            # thief は最暗部だったため、主装甲のみ可読下限 0.15 まで微調整する。
+            "cloth": (0.032, 0.039, 0.063),
+            "fabric": (0.088, 0.060, 0.154),
+            "armour": (0.174, 0.146, 0.266),
+            "metal": (0.049, 0.060, 0.088),
+            "trim": (0.30, 0.34, 0.42),
+            "trim_high": (0.35, 0.39, 0.47),
+            "glow": (0.25, 0.015, 0.31),
+            "emission": (0.66, 0.030, 0.75),
         },
         "boss": {
-            "cloth": (0.015, 0.003, 0.008),
-            "fabric": (0.075, 0.014, 0.029),
-            "armour": (0.075, 0.022, 0.032),
-            "metal": (0.026, 0.008, 0.014),
-            "trim": (0.52, 0.22, 0.055),
-            "glow": (0.42, 0.002, 0.008),
-            "emission": (1.0, 0.008, 0.015),
+            # boss も黒鉄の印象は維持しつつ、面とトリムの境界を読める中間調へ上げる。
+            "cloth": (0.049, 0.032, 0.039),
+            "fabric": (0.147, 0.077, 0.095),
+            "armour": (0.203, 0.161, 0.175),
+            "metal": (0.074, 0.060, 0.070),
+            "trim": (0.37, 0.42, 0.50),
+            "trim_high": (0.39, 0.44, 0.52),
+            "glow": (0.32, 0.010, 0.014),
+            "emission": (0.82, 0.018, 0.024),
         },
     }[kind]
 
@@ -277,42 +284,38 @@ def palette(kind: str) -> dict[str, bpy.types.Material]:
             f"{title}RoleFabric",
             (*values["fabric"], 1),
             metallic=0.04,
-            roughness=0.74,
+            roughness=0.88,
             texture=fabric_texture,
         )
     armour = pbr_material(
             f"{title}EngravedArmour",
             (*values["armour"], 1),
-            metallic=0.78,
-            roughness=0.31,
-            coat=0.16,
+            metallic=0.80,
+            roughness=0.30,
+            coat=0.30,
             texture=armour_texture,
         )
     dark = pbr_material(
             f"{title}DarkMechanism",
             (*values["metal"], 1),
-            metallic=0.84,
-            roughness=0.32,
+            metallic=0.85,
+            roughness=0.42,
+            coat=0.15,
         )
     brass = pbr_material(
             f"{title}AntiqueBrass",
             (*values["trim"], 1),
             metallic=0.9,
-            roughness=0.27,
-            coat=0.12,
+            roughness=0.20,
+            coat=0.28,
             texture=trim_texture,
         )
     brass_high = pbr_material(
             f"{title}PolishedBrass",
-            (
-                min(1.0, values["trim"][0] * 1.45),
-                min(1.0, values["trim"][1] * 1.5),
-                min(1.0, values["trim"][2] * 1.6),
-                1,
-            ),
-            metallic=0.92,
-            roughness=0.18,
-            coat=0.24,
+            (*values["trim_high"], 1),
+            metallic=0.94,
+            roughness=0.14,
+            coat=0.35,
         )
     glow = pbr_material(
             f"{title}ChronoGlow",
@@ -345,6 +348,79 @@ def palette(kind: str) -> dict[str, bpy.types.Material]:
         "glow": glow,
         "eye": eye,
     }
+
+
+def refresh_existing_enemy_materials(kind: str):
+    """Recolour a production source without touching its mesh, UVs, or rig."""
+
+    source_path = SOURCE_DIR / f"enemy-{kind}-concept.blend"
+    if not source_path.is_file():
+        raise RuntimeError(f"{kind}: material refresh source is missing: {source_path}")
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    rigs = [obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"]
+    if len(rigs) != 1:
+        raise RuntimeError(f"{kind}: expected one rig in material refresh source, got {len(rigs)}")
+    action_names = {action.name for action in bpy.data.actions}
+    missing_actions = REQUIRED_ACTIONS - action_names
+    if missing_actions:
+        raise RuntimeError(f"{kind}: material refresh source missing actions: {sorted(missing_actions)}")
+
+    title = kind.title()
+    categories = {
+        f"{title}VoidCloth": "cloth",
+        f"{title}RoleFabric": "fabric",
+        f"{title}EngravedArmour": "armour",
+        f"{title}DarkMechanism": "dark",
+        f"{title}AntiqueBrass": "brass",
+        f"{title}PolishedBrass": "brass_high",
+        f"{title}ChronoGlow": "glow",
+        f"{title}PredatorEye": "eye",
+    }
+    # The previous refresh created new datablocks before releasing the old
+    # names, so Blender persisted this exact `.001` suffix.  Accept only that
+    # known legacy form and write the refreshed source back with canonical
+    # names; do not use broad/fuzzy material-name matching.
+    original_materials = {
+        name: bpy.data.materials.get(name) or bpy.data.materials.get(f"{name}.001")
+        for name in categories
+    }
+    missing_materials = sorted(
+        name for name, material in original_materials.items() if material is None
+    )
+    if missing_materials:
+        raise RuntimeError(
+            f"{kind}: material refresh source missing materials: {', '.join(missing_materials)}"
+        )
+    refreshed = palette(kind)
+    replacements = 0
+    replaced_categories = set()
+    for obj in bpy.context.scene.objects:
+        if obj.type != "MESH":
+            continue
+        for slot_index, slot in enumerate(obj.material_slots):
+            material_name = slot.material.name if slot.material else ""
+            category = categories.get(material_name) or categories.get(
+                material_name.removesuffix(".001")
+            )
+            if category:
+                obj.data.materials[slot_index] = refreshed[category]
+                replacements += 1
+                replaced_categories.add(category)
+    expected_categories = set(categories.values())
+    if replaced_categories != expected_categories:
+        raise RuntimeError(
+            f"{kind}: material refresh expected roles {sorted(expected_categories)}, "
+            f"replaced {sorted(replaced_categories)} across {replacements} slots"
+        )
+    for name, original in original_materials.items():
+        bpy.data.materials.remove(original, do_unlink=True)
+        refreshed[categories[name]].name = name
+    print(
+        f"CONCEPT_HUMANOID_MATERIAL_REFRESH kind={kind} source={source_path} "
+        f"bones={len(rigs[0].data.bones)} actions={','.join(sorted(action_names))}",
+        flush=True,
+    )
+    return rigs[0]
 
 
 def remove_hero_weapons() -> None:
@@ -1643,10 +1719,31 @@ def validate_meshes(kind: str, *, fail: bool = True) -> list[str]:
     return corrected
 
 
-def build_enemy(kind: str) -> None:
+def build_enemy(kind: str, *, materials_only: bool = False) -> None:
     print(f"HUMANOID_BUILD_BEGIN kind={kind}", flush=True)
     clear_scene()
     bpy.context.preferences.filepaths.save_version = 0
+
+    if materials_only:
+        rig = refresh_existing_enemy_materials(kind)
+        bpy.context.scene["asset_name"] = f"Chrono Arena {kind.title()} Concept Production"
+        bpy.context.scene["design_reference"] = f"{kind}-turnaround-v2.png"
+        bpy.context.scene["body_topology"] = "MPFB2 2.0.17 CC0"
+        bpy.context.scene["animation_clips"] = "Idle,Move,Attack,Hit,Death"
+        bpy.context.scene["pipeline"] = "mpfb-continuous-anatomy-concept-armour-v1"
+        bpy.context.scene["runtime_role"] = kind
+        bpy.context.scene["production_asset"] = True
+        source_path = SOURCE_DIR / f"enemy-{kind}-concept.blend"
+        model_path = MODEL_DIR / f"enemy-{kind}-concept.glb"
+        bpy.ops.wm.save_as_mainfile(filepath=str(source_path))
+        export_glb(model_path, animations=True)
+        print(
+            "CONCEPT_HUMANOID_READY "
+            f"kind={kind} source={source_path} model={model_path} "
+            f"bones={len(rig.data.bones)} mode=material-refresh",
+            flush=True,
+        )
+        return
 
     try:
         human, rig = create_mpfb_enemy(kind)
@@ -1704,13 +1801,19 @@ def build_enemy(kind: str) -> None:
 
 def main() -> None:
     separator = sys.argv.index("--") if "--" in sys.argv else len(sys.argv)
-    kinds = tuple(sys.argv[separator + 1 :]) or KINDS
+    args = tuple(sys.argv[separator + 1 :])
+    materials_only = "--materials-only" in args
+    kinds = tuple(arg for arg in args if arg != "--materials-only") or KINDS
     invalid = [kind for kind in kinds if kind not in KINDS]
     if invalid:
         raise ValueError(f"Unknown humanoid enemy kinds: {invalid}")
     for kind in kinds:
-        build_enemy(kind)
-    print(f"CONCEPT_HUMANOIDS_READY kinds={','.join(kinds)}", flush=True)
+        build_enemy(kind, materials_only=materials_only)
+    print(
+        f"CONCEPT_HUMANOIDS_READY kinds={','.join(kinds)} "
+        f"mode={'material-refresh' if materials_only else 'full-build'}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

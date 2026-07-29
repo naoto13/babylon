@@ -3,3 +3,12 @@ dist/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# キャラ刷新の中間生成物。三面図(turnarounds)と最終成果物(nendo)、
+# SPAR3D への入力(refs)だけをリポジトリに残し、再生成できる中間物は除外する。
+assets/production/demonic/spar3d/
+assets/production/demonic/spar3d-nendo/
+assets/production/demonic/fbx/
+assets/production/demonic/mixamo/
+# 写実系の参照画像から作ったマテリアル一式（この経路は品質が要求に届かず打ち切った）
+assets/production/demonic/materials/

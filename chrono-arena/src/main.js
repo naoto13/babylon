@@ -5,7 +5,9 @@ import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer.js";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight.js";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
+import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { HDRCubeTexture } from "@babylonjs/core/Materials/Textures/hdrCubeTexture.js";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
@@ -20,6 +22,7 @@ import { CreateTube } from "@babylonjs/core/Meshes/Builders/tubeBuilder.pure.js"
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator.js";
+import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline.js";
 
 import {
   ARENA_RADIUS,
@@ -95,6 +98,7 @@ const modelContainers = new Map();
 
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
+  environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
   heroModel: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
   chaserModel: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
   shooterModel: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
@@ -114,6 +118,7 @@ const timeCosts = Object.freeze({ q: 2, e: 3, r: 4, dash: 0 });
 let engine;
 let scene;
 let glow;
+let ssao;
 let camera;
 let shadowGenerator;
 let player;
@@ -403,6 +408,13 @@ function initScene() {
   scene.fogMode = Scene.FOGMODE_EXP2;
   scene.fogDensity = 0.014;
   scene.fogColor = new Color3(0.018, 0.04, 0.072);
+  // 空は描かず、アリーナの色だけをPBR金属へ反射させる軽量IBL。
+  scene.environmentTexture = new HDRCubeTexture(assetPaths.environment, scene, 256, false, true, false, true);
+  scene.environmentIntensity = 0.78;
+  scene.imageProcessingConfiguration.toneMappingEnabled = true;
+  scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+  scene.imageProcessingConfiguration.exposure = 0.98;
+  scene.imageProcessingConfiguration.contrast = 1.03;
 
   cameraBasePosition = new Vector3(0, 22, -19);
   camera = new FreeCamera("fixed-camera", cameraBasePosition.clone(), scene);
@@ -419,6 +431,13 @@ function initScene() {
   keyLight.position = new Vector3(12, 24, -12);
   keyLight.intensity = 1.4;
   keyLight.diffuse = new Color3(0.72, 0.9, 1);
+
+  // 背後の寒色リムで、明度を上げた装甲のパネル縁とトリムを分離して見せる。
+  const rimLight = new DirectionalLight("rim-light", new Vector3(0.35, -0.25, -1), scene);
+  rimLight.position = new Vector3(-8, 8, 16);
+  rimLight.intensity = 2.0;
+  rimLight.diffuse = new Color3(0.45, 0.85, 1.0);
+  rimLight.shadowEnabled = false;
 
   shadowGenerator = new ShadowGenerator(1024, keyLight);
   shadowGenerator.useBlurExponentialShadowMap = true;
@@ -1821,8 +1840,42 @@ function animateArena(deltaSeconds) {
   for (const item of clockwork) item.mesh.rotation.y += item.speed * deltaSeconds;
 }
 
+function ensureSsao() {
+  if (ssao || !SSAO2RenderingPipeline.IsSupported) return;
+  // 半解像度でだけ生成し、lowではこのパイプライン自体を持たない。
+  ssao = new SSAO2RenderingPipeline("arena-ssao", scene, { ssaoRatio: 0.5, blurRatio: 0.5 });
+  ssao.radius = 1.18;
+  ssao.base = 0.03;
+  ssao.epsilon = 0.03;
+  ssao.expensiveBlur = true;
+  ssao.bilateralSoften = 0.08;
+  ssao.bilateralTolerance = 0.18;
+}
+
+function disposeSsao() {
+  if (!ssao) return;
+  ssao.dispose();
+  ssao = null;
+  // SSAO2が有効化したPrePassも破棄し、lowの追加GPUコストを残さない。
+  scene.disablePrePassRenderer();
+}
+
 function applyQuality(quality) {
   if (!engine || !glow) return;
+  if (quality === "low") {
+    disposeSsao();
+  } else {
+    ensureSsao();
+    if (ssao) {
+      // 重ねてアタッチしないよう毎回外してから、mid/highだけを戻す。
+      scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(ssao.name, camera);
+      const highQuality = quality === "high";
+      ssao.samples = highQuality ? 8 : 4;
+      ssao.bilateralSamples = highQuality ? 6 : 4;
+      ssao.totalStrength = highQuality ? 0.58 : 0.42;
+      scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(ssao.name, camera, true);
+    }
+  }
   if (quality === "low") {
     engine.setHardwareScalingLevel(1.55);
     glow.intensity = 0.34;
