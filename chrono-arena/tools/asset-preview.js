@@ -41,30 +41,30 @@ const models = Object.freeze({
   },
   chaser: {
     label: "Chaser",
-    newPath: new URL("../assets/production/demonic/nendo/chaser-nendo.glb", import.meta.url).href,
+    newPath: new URL("../assets/production/demonic/rigged/chaser-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
-    newScale: 2.6,
+    newScale: 1.5,
     oldScale: 1.28
   },
   shooter: {
     label: "Shooter",
-    newPath: new URL("../assets/production/demonic/nendo/shooter-nendo.glb", import.meta.url).href,
+    newPath: new URL("../assets/production/demonic/rigged/shooter-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
-    newScale: 3.2,
+    newScale: 1.8,
     oldScale: 1.24
   },
   thief: {
     label: "Thief",
-    newPath: new URL("../assets/production/demonic/nendo/thief-nendo.glb", import.meta.url).href,
+    newPath: new URL("../assets/production/demonic/rigged/thief-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-thief-concept.glb", import.meta.url).href,
-    newScale: 3.0,
+    newScale: 1.7,
     oldScale: 1.28
   },
   boss: {
     label: "Boss",
-    newPath: new URL("../assets/production/demonic/nendo/boss-nendo.glb", import.meta.url).href,
+    newPath: new URL("../assets/production/demonic/rigged/boss-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-boss-concept.glb", import.meta.url).href,
-    newScale: 4.0,
+    newScale: 2.2,
     oldScale: 1.42
   }
 });

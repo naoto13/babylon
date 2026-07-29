@@ -12,6 +12,7 @@ and five review renders under ``assets/production/demonic/rigged`` only.
 from __future__ import annotations
 
 import math
+import os
 import sys
 import importlib.util
 from dataclasses import dataclass
@@ -27,9 +28,13 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT_DIR / "assets" / "production" / "demonic" / "spar3d"
 OUTPUT_DIR = ROOT_DIR / "assets" / "production" / "demonic" / "rigged"
 TARGET_HEIGHT = 1.8
-MAX_GLB_BYTES = int(3.5 * 1024 * 1024)
 MAX_INFLUENCES = 4
-MAX_FACES = 60_000
+
+# 敵は最大74体が同時に出現し全メッシュが影のキャスターに登録されるので、
+# 主役の hero より一段軽くする。環境変数で上書きできる。
+#   NENDO_MAX_FACES=20000 NENDO_MAX_GLB_MB=1.5 blender ... -- chaser-nendo
+MAX_FACES = int(os.environ.get("NENDO_MAX_FACES", 60_000))
+MAX_GLB_BYTES = int(float(os.environ.get("NENDO_MAX_GLB_MB", "3.5")) * 1024 * 1024)
 FRAGMENT_MAX_VERTICES = 16
 WEIGHT_POWER = 4.0
 EXPECTED_BONE_NAMES = (
