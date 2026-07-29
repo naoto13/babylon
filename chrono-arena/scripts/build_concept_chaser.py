@@ -30,10 +30,9 @@ from build_blender_assets import (  # noqa: E402
     activate,
     clear_scene,
     export_glb,
-    material,
     parent_keep_transform,
 )
-from build_custom_hero import make_mesh  # noqa: E402
+from build_custom_hero import make_mesh, pbr_material  # noqa: E402
 from build_high_detail_enemies import (  # noqa: E402
     chaser_bones,
     create_chaser_actions,
@@ -42,6 +41,7 @@ from build_high_detail_enemies import (  # noqa: E402
 
 
 PARTS: list[bpy.types.Object] = []
+REQUIRED_ACTIONS = {"Idle", "Move", "Attack", "Hit", "Death"}
 
 
 def register(obj: bpy.types.Object, rig: bpy.types.Object, bone: str):
@@ -533,51 +533,58 @@ def extruded_outline_yz(
 
 def build_materials() -> dict[str, bpy.types.Material]:
     return {
-        "underbody": material(
+        "underbody": pbr_material(
             "ChaserConceptUnderbody",
-            (0.004, 0.007, 0.014, 1),
-            metallic=0.38,
-            roughness=0.54,
+            # 下地の布目を残し、殻より一段暗く保つ。
+            (0.035, 0.046, 0.063, 1),
+            metallic=0.04,
+            roughness=0.88,
         ),
-        "iron": material(
+        "iron": pbr_material(
             "ChaserConceptMidnightIron",
-            (0.018, 0.028, 0.06, 1),
-            metallic=0.78,
-            roughness=0.34,
+            # 旧値の約 3.5 倍。黒ではなく中間調ガンメタルを albedo にする。
+            (0.147, 0.182, 0.228, 1),
+            metallic=0.85,
+            roughness=0.42,
+            coat=0.15,
         ),
-        "steel": material(
+        "steel": pbr_material(
             "ChaserConceptBlueSteel",
-            (0.065, 0.085, 0.13, 1),
-            metallic=0.86,
-            roughness=0.28,
+            (0.16, 0.18, 0.21, 1),
+            metallic=0.80,
+            roughness=0.30,
+            coat=0.30,
         ),
-        "brass": material(
+        "brass": pbr_material(
             "ChaserConceptAntiqueBrass",
-            (0.34, 0.145, 0.032, 1),
-            metallic=0.88,
-            roughness=0.3,
+            (0.28, 0.32, 0.39, 1),
+            metallic=0.90,
+            roughness=0.20,
+            coat=0.28,
         ),
-        "cyan": material(
+        "cyan": pbr_material(
             "ChaserConceptChronoCyan",
-            (0.002, 0.12, 0.30, 1),
+            (0.28, 0.010, 0.030, 1),
             metallic=0.12,
             roughness=0.16,
-            emission=(0.0, 0.42, 0.72),
-            emission_strength=0.42,
+            # #e11d48 heat in cracks; kept local so the shell remains black iron.
+            emission=(0.78, 0.012, 0.055),
+            emission_strength=0.50,
         ),
-        "eye": material(
+        "eye": pbr_material(
             "ChaserConceptPredatorEye",
-            (0.002, 0.16, 0.42, 1),
+            (0.36, 0.012, 0.035, 1),
             metallic=0.08,
             roughness=0.1,
-            emission=(0.0, 0.58, 0.92),
-            emission_strength=1.25,
+            emission=(0.88, 0.015, 0.065),
+            emission_strength=1.10,
         ),
-        "black": material(
+        "black": pbr_material(
             "ChaserConceptJointBlack",
-            (0.002, 0.004, 0.009, 1),
-            metallic=0.72,
-            roughness=0.3,
+            (0.006, 0.008, 0.011, 1),
+            metallic=0.85,
+            roughness=0.42,
+            coat=0.15,
         ),
     }
 
@@ -1298,10 +1305,94 @@ def consolidate(rig: bpy.types.Object) -> bpy.types.Object:
     return merged
 
 
+def refresh_existing_chaser_materials() -> bpy.types.Object:
+    """Replace only material datablocks in the exported production source."""
+
+    source_path = SOURCE_DIR / "enemy-chaser-concept.blend"
+    if not source_path.is_file():
+        raise RuntimeError(f"chaser: material refresh source is missing: {source_path}")
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    rigs = [obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"]
+    if len(rigs) != 1:
+        raise RuntimeError(f"chaser: expected one rig in material refresh source, got {len(rigs)}")
+    action_names = {action.name for action in bpy.data.actions}
+    missing_actions = REQUIRED_ACTIONS - action_names
+    if missing_actions:
+        raise RuntimeError(f"chaser: material refresh source missing actions: {sorted(missing_actions)}")
+
+    categories = {
+        "ChaserConceptUnderbody": "underbody",
+        "ChaserConceptMidnightIron": "iron",
+        "ChaserConceptBlueSteel": "steel",
+        "ChaserConceptAntiqueBrass": "brass",
+        "ChaserConceptChronoCyan": "cyan",
+        "ChaserConceptPredatorEye": "eye",
+        "ChaserConceptJointBlack": "black",
+    }
+    original_materials = {
+        name: bpy.data.materials.get(name)
+        for name in categories
+    }
+    missing_materials = sorted(name for name, material in original_materials.items() if material is None)
+    if missing_materials:
+        raise RuntimeError(
+            f"chaser: material refresh source missing materials: {', '.join(missing_materials)}"
+        )
+
+    refreshed = build_materials()
+    replacements = 0
+    replaced_categories = set()
+    for obj in bpy.context.scene.objects:
+        if obj.type != "MESH":
+            continue
+        for slot_index, slot in enumerate(obj.material_slots):
+            category = categories.get(slot.material.name) if slot.material else None
+            if category:
+                obj.data.materials[slot_index] = refreshed[category]
+                replacements += 1
+                replaced_categories.add(category)
+    expected_categories = set(categories.values())
+    if replaced_categories != expected_categories:
+        raise RuntimeError(
+            f"chaser: material refresh expected roles {sorted(expected_categories)}, "
+            f"replaced {sorted(replaced_categories)} across {replacements} slots"
+        )
+    for name, original in original_materials.items():
+        bpy.data.materials.remove(original, do_unlink=True)
+        refreshed[categories[name]].name = name
+    print(
+        f"CONCEPT_CHASER_MATERIAL_REFRESH source={source_path} "
+        f"bones={len(rigs[0].data.bones)} actions={','.join(sorted(action_names))}",
+        flush=True,
+    )
+    return rigs[0]
+
+
 def main() -> None:
     bpy.context.preferences.filepaths.save_version = 0
     clear_scene()
     PARTS.clear()
+    separator = sys.argv.index("--") if "--" in sys.argv else len(sys.argv)
+    materials_only = "--materials-only" in sys.argv[separator + 1 :]
+    if materials_only:
+        rig = refresh_existing_chaser_materials()
+        bpy.context.scene["asset_name"] = "Chrono Arena Chaser Concept Production"
+        bpy.context.scene["design_reference"] = "chaser-turnaround-v2.png"
+        bpy.context.scene["animation_clips"] = "Idle,Move,Attack,Hit,Death"
+        bpy.context.scene["pipeline"] = "continuous-surface-concept-translation-v1"
+        bpy.context.scene["runtime_role"] = "chaser"
+        bpy.context.scene["production_asset"] = True
+        source_path = SOURCE_DIR / "enemy-chaser-concept.blend"
+        model_path = MODEL_DIR / "enemy-chaser-concept.glb"
+        bpy.ops.wm.save_as_mainfile(filepath=str(source_path))
+        export_glb(model_path, animations=True)
+        print(
+            "CONCEPT_CHASER_READY "
+            f"source={source_path} model={model_path} "
+            f"bones={len(rig.data.bones)} mode=material-refresh",
+            flush=True,
+        )
+        return
     mats = build_materials()
     rig = create_rig("ChaserConcept", chaser_bones())
 

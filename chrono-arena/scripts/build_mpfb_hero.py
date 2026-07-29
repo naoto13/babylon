@@ -34,6 +34,7 @@ from build_custom_hero import (  # noqa: E402
     create_custom_geometry,
     extruded_panel,
     loft_mesh,
+    refresh_demonic_hero_materials_in_place,
     rigid_bind,
     unwrap_character_meshes,
 )
@@ -46,6 +47,7 @@ from build_blender_assets import (  # noqa: E402
 
 CUSTOM_MODEL_NAME = "chrono-duelist-custom.glb"
 CUSTOM_SOURCE_NAME = "chrono-duelist-custom.blend"
+REQUIRED_HERO_ACTIONS = {"Idle", "Run", "Attack", "Dash", "Hit", "FutureSlash"}
 
 # The original procedural rig remains the animation authoring coordinate
 # system. Each rigid armour piece is transformed from these rest bones to its
@@ -138,6 +140,36 @@ def create_mpfb_character():
     if rig is None:
         raise RuntimeError("MPFB2 did not create the game_engine rig")
     return human, rig
+
+
+def refresh_baked_hero_source():
+    """Refresh materials on the checked-in MPFB source when the add-on is absent.
+
+    This path deliberately leaves vertex positions, armature data, weights, and
+    existing actions intact.  It is the hero equivalent of the baked-foundation
+    fallback used by the concept humanoid enemy builder.
+    """
+
+    source_path = SOURCE_DIR / CUSTOM_SOURCE_NAME
+    if not source_path.is_file():
+        raise RuntimeError(
+            f"MPFB2 is unavailable and baked hero source is missing: {source_path}"
+        )
+    bpy.ops.wm.open_mainfile(filepath=str(source_path))
+    rigs = [obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"]
+    if len(rigs) != 1:
+        raise RuntimeError(f"baked hero expected one rig, got {len(rigs)}")
+    action_names = {action.name for action in bpy.data.actions}
+    missing = REQUIRED_HERO_ACTIONS - action_names
+    if missing:
+        raise RuntimeError(f"baked hero is missing animation clips: {sorted(missing)}")
+    refresh_demonic_hero_materials_in_place()
+    print(
+        f"MPFB_HERO_SOURCE_REUSED source={source_path} bones={len(rigs[0].data.bones)} "
+        f"actions={','.join(sorted(action_names))}",
+        flush=True,
+    )
+    return rigs[0]
 
 
 def bake_visible_human(human, rig):
@@ -441,7 +473,52 @@ def main() -> None:
     clear_scene()
     bpy.context.preferences.filepaths.save_version = 0
 
-    human, rig = create_mpfb_character()
+    separator = sys.argv.index("--") if "--" in sys.argv else len(sys.argv)
+    materials_only = "--materials-only" in sys.argv[separator + 1 :]
+    if materials_only:
+        rig = refresh_baked_hero_source()
+        bpy.context.scene["asset_name"] = "Chrono Duelist Custom"
+        bpy.context.scene["source_reference"] = "chrono-duelist-turnaround-v2.png"
+        bpy.context.scene["body_topology"] = "MPFB2 2.0.17 CC0"
+        bpy.context.scene["animation_clips"] = "Idle,Run,Attack,Dash,Hit,FutureSlash"
+        bpy.context.scene["pipeline"] = "mpfb-game-rig-custom-armour-pbr"
+        source_path = SOURCE_DIR / CUSTOM_SOURCE_NAME
+        model_path = MODEL_DIR / CUSTOM_MODEL_NAME
+        bpy.ops.wm.save_as_mainfile(filepath=str(source_path))
+        export_glb(model_path, animations=True)
+        add_preview_stage(rig, "chrono-duelist-idle.png")
+        print(
+            "MPFB_CUSTOM_HERO_READY "
+            f"source={source_path} model={model_path} "
+            f"bones={len(rig.data.bones)} mode=baked-material-refresh",
+            flush=True,
+        )
+        return
+
+    try:
+        human, rig = create_mpfb_character()
+    except RuntimeError as error:
+        if "MPFB2 is not enabled" not in str(error):
+            raise
+        rig = refresh_baked_hero_source()
+        bpy.context.scene["asset_name"] = "Chrono Duelist Custom"
+        bpy.context.scene["source_reference"] = "chrono-duelist-turnaround-v2.png"
+        bpy.context.scene["body_topology"] = "MPFB2 2.0.17 CC0"
+        bpy.context.scene["animation_clips"] = "Idle,Run,Attack,Dash,Hit,FutureSlash"
+        bpy.context.scene["pipeline"] = "mpfb-game-rig-custom-armour-pbr"
+        source_path = SOURCE_DIR / CUSTOM_SOURCE_NAME
+        model_path = MODEL_DIR / CUSTOM_MODEL_NAME
+        bpy.ops.wm.save_as_mainfile(filepath=str(source_path))
+        export_glb(model_path, animations=True)
+        add_preview_stage(rig, "chrono-duelist-idle.png")
+        print(
+            "MPFB_CUSTOM_HERO_READY "
+            f"source={source_path} model={model_path} "
+            f"bones={len(rig.data.bones)} mode=baked-material-refresh",
+            flush=True,
+        )
+        return
+
     human = bake_visible_human(human, rig)
     rename_deformation_bones(human, rig)
 

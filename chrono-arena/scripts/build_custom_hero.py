@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import numpy as np
 from mathutils import Vector
 
 
@@ -45,6 +46,8 @@ def pbr_material(
     emission_strength: float = 0.0,
     coat: float = 0.0,
     texture=None,
+    normal_texture=None,
+    orm_texture=None,
 ):
     material = bpy.data.materials.new(name)
     material.diffuse_color = base
@@ -72,6 +75,8 @@ def pbr_material(
         image_node.image = texture
         image_node.interpolation = "Linear"
         material.node_tree.links.new(image_node.outputs["Color"], bsdf.inputs["Base Color"])
+    if normal_texture or orm_texture:
+        attach_surface_detail_nodes(material, normal_texture, orm_texture)
     return material
 
 
@@ -117,6 +122,417 @@ def create_surface_texture(
     image.file_format = "PNG"
     image.save()
     return image
+
+
+# 主役 hero の金属面は、圧縮しても 5MB 以下に収まる共有 2048px atlas にする。
+# 現行の smart-project UV は各装甲マテリアルが 0..1 を広く使うため、継ぎ目で
+# 破綻しないタイル可能な板金パターンを全装甲材で共有する。
+SURFACE_TEXTURE_SIZE = 2048
+
+
+def _smoothstep(edge0: float, edge1: float, values: np.ndarray) -> np.ndarray:
+    ratio = np.clip((values - edge0) / (edge1 - edge0), 0.0, 1.0)
+    return ratio * ratio * (3.0 - 2.0 * ratio)
+
+
+def _save_data_texture(name: str, rgb: np.ndarray) -> bpy.types.Image:
+    """Save an 8-bit Non-Color map without silently reusing an older image."""
+
+    existing = bpy.data.images.get(name)
+    if existing:
+        bpy.data.images.remove(existing)
+    height, width, _ = rgb.shape
+    image = bpy.data.images.new(name, width=width, height=height, alpha=False)
+    image.colorspace_settings.name = "Non-Color"
+    rgba = np.empty((height, width, 4), dtype=np.float32)
+    rgba[:, :, :3] = np.clip(rgb, 0.0, 1.0)
+    rgba[:, :, 3] = 1.0
+    image.pixels.foreach_set(np.ascontiguousarray(rgba).ravel())
+    image.filepath_raw = str(TEXTURE_DIR / f"{name}.png")
+    image.file_format = "PNG"
+    image.save()
+    return image
+
+
+def _add_panel(
+    height: np.ndarray,
+    bevel_mask: np.ndarray,
+    groove_mask: np.ndarray,
+    *,
+    bounds: tuple[float, float, float, float],
+    lift: float = 0.055,
+    bevel_width: float = 0.007,
+    groove_width: float = 0.0038,
+) -> None:
+    """Add a raised plate, its chamfer, and a recessed seam to the height field."""
+
+    image_height, image_width = height.shape
+    left, bottom, right, top = bounds
+    margin = max(bevel_width, groove_width) * 5.0
+    x0 = max(0, int((left - margin) * image_width))
+    x1 = min(image_width, int((right + margin) * image_width) + 1)
+    y0 = max(0, int((bottom - margin) * image_height))
+    y1 = min(image_height, int((top + margin) * image_height) + 1)
+    x = (np.arange(x0, x1, dtype=np.float32) + 0.5) / image_width
+    y = (np.arange(y0, y1, dtype=np.float32) + 0.5) / image_height
+    u, v = np.meshgrid(x, y)
+    signed_distance = np.minimum.reduce((u - left, right - u, v - bottom, top - v))
+    chamfer = _smoothstep(0.0, bevel_width, signed_distance)
+    seam = np.exp(-np.square(signed_distance / groove_width))
+    height[y0:y1, x0:x1] += lift * chamfer - lift * 0.92 * seam
+    bevel_mask[y0:y1, x0:x1] = np.maximum(
+        bevel_mask[y0:y1, x0:x1], 1.0 - np.abs(chamfer * 2.0 - 1.0)
+    )
+    groove_mask[y0:y1, x0:x1] = np.maximum(groove_mask[y0:y1, x0:x1], seam)
+
+
+def _add_rivet(
+    height: np.ndarray,
+    wear_mask: np.ndarray,
+    *,
+    center: tuple[float, float],
+    radius: float = 0.008,
+) -> None:
+    """Add a sparse hemispherical rivet with a slightly worn perimeter."""
+
+    image_height, image_width = height.shape
+    cx, cy = center
+    x0 = max(0, int((cx - radius * 1.4) * image_width))
+    x1 = min(image_width, int((cx + radius * 1.4) * image_width) + 1)
+    y0 = max(0, int((cy - radius * 1.4) * image_height))
+    y1 = min(image_height, int((cy + radius * 1.4) * image_height) + 1)
+    x = (np.arange(x0, x1, dtype=np.float32) + 0.5) / image_width
+    y = (np.arange(y0, y1, dtype=np.float32) + 0.5) / image_height
+    u, v = np.meshgrid(x, y)
+    distance = np.sqrt(np.square(u - cx) + np.square(v - cy)) / radius
+    dome = np.clip(1.0 - np.square(distance), 0.0, 1.0)
+    ring = np.exp(-np.square((distance - 1.0) / 0.18))
+    height[y0:y1, x0:x1] += dome * 0.048 - ring * 0.018
+    wear_mask[y0:y1, x0:x1] = np.maximum(wear_mask[y0:y1, x0:x1], ring * 0.55)
+
+
+def _add_groove_segment(
+    height: np.ndarray,
+    groove_mask: np.ndarray,
+    *,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    width: float = 0.0024,
+) -> None:
+    """Carve a shallow circuit stroke; it is deliberate geometry, never noise."""
+
+    image_height, image_width = height.shape
+    ax, ay = start
+    bx, by = end
+    margin = width * 5.0
+    x0 = max(0, int((min(ax, bx) - margin) * image_width))
+    x1 = min(image_width, int((max(ax, bx) + margin) * image_width) + 1)
+    y0 = max(0, int((min(ay, by) - margin) * image_height))
+    y1 = min(image_height, int((max(ay, by) + margin) * image_height) + 1)
+    x = (np.arange(x0, x1, dtype=np.float32) + 0.5) / image_width
+    y = (np.arange(y0, y1, dtype=np.float32) + 0.5) / image_height
+    u, v = np.meshgrid(x, y)
+    segment_x = bx - ax
+    segment_y = by - ay
+    length_squared = segment_x * segment_x + segment_y * segment_y
+    projection = np.clip(((u - ax) * segment_x + (v - ay) * segment_y) / length_squared, 0.0, 1.0)
+    distance = np.sqrt(np.square(u - (ax + projection * segment_x)) + np.square(v - (ay + projection * segment_y)))
+    stroke = np.exp(-np.square(distance / width))
+    height[y0:y1, x0:x1] -= stroke * 0.022
+    groove_mask[y0:y1, x0:x1] = np.maximum(groove_mask[y0:y1, x0:x1], stroke * 0.78)
+
+
+def create_armour_surface_textures() -> tuple[bpy.types.Image, bpy.types.Image]:
+    """Generate the shared 2048² tangent normal and ORM maps for plated metal."""
+
+    size = SURFACE_TEXTURE_SIZE
+    height = np.zeros((size, size), dtype=np.float32)
+    bevel_mask = np.zeros_like(height)
+    groove_mask = np.zeros_like(height)
+    wear_mask = np.zeros_like(height)
+    # UV 全体に密度を揃えた非対称パネル。縁の溝と面取りを別量で保持する。
+    panels = (
+        (0.025, 0.035, 0.245, 0.235), (0.275, 0.030, 0.545, 0.190),
+        (0.575, 0.040, 0.935, 0.260), (0.055, 0.285, 0.310, 0.505),
+        (0.350, 0.245, 0.650, 0.475), (0.695, 0.315, 0.960, 0.560),
+        (0.030, 0.575, 0.230, 0.830), (0.275, 0.540, 0.555, 0.760),
+        (0.600, 0.600, 0.910, 0.825), (0.080, 0.860, 0.370, 0.970),
+        (0.420, 0.805, 0.700, 0.955), (0.750, 0.875, 0.970, 0.975),
+    )
+    for bounds in panels:
+        _add_panel(height, bevel_mask, groove_mask, bounds=bounds)
+
+    for center in (
+        (0.060, 0.070), (0.220, 0.070), (0.295, 0.055), (0.510, 0.165),
+        (0.595, 0.070), (0.915, 0.235), (0.075, 0.485), (0.295, 0.320),
+        (0.370, 0.445), (0.625, 0.270), (0.720, 0.535), (0.940, 0.340),
+        (0.055, 0.805), (0.210, 0.600), (0.300, 0.740), (0.535, 0.560),
+        (0.620, 0.810), (0.895, 0.625), (0.095, 0.885), (0.680, 0.930),
+    ):
+        _add_rivet(height, wear_mask, center=center)
+
+    # 発光回路に合わせやすい浅い彫刻。面を砂嵐にせず意匠だけを残す。
+    circuits = (
+        ((0.085, 0.155), (0.185, 0.155)), ((0.185, 0.155), (0.215, 0.190)),
+        ((0.410, 0.305), (0.540, 0.305)), ((0.540, 0.305), (0.575, 0.355)),
+        ((0.745, 0.420), (0.865, 0.420)), ((0.865, 0.420), (0.895, 0.470)),
+        ((0.115, 0.675), (0.190, 0.725)), ((0.370, 0.635), (0.485, 0.635)),
+        ((0.485, 0.635), (0.515, 0.685)), ((0.665, 0.700), (0.820, 0.700)),
+        ((0.465, 0.880), (0.605, 0.880)), ((0.605, 0.880), (0.640, 0.915)),
+    )
+    for start, end in circuits:
+        _add_groove_segment(height, groove_mask, start=start, end=end)
+
+    # 摩耗は面全体のノイズではなく、凸縁と短い擦過傷だけに限定する。
+    for start, end in (
+        ((0.095, 0.050), (0.155, 0.061)), ((0.385, 0.255), (0.455, 0.273)),
+        ((0.710, 0.330), (0.775, 0.344)), ((0.115, 0.780), (0.170, 0.793)),
+        ((0.780, 0.805), (0.855, 0.818)), ((0.470, 0.945), (0.535, 0.933)),
+    ):
+        _add_groove_segment(height, wear_mask, start=start, end=end, width=0.00125)
+    wear_mask = np.maximum(wear_mask, bevel_mask * 0.68)
+
+    gradient_y, gradient_x = np.gradient(height)
+    normal = np.stack((-gradient_x * 38.0, -gradient_y * 38.0, np.ones_like(height)), axis=-1)
+    normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
+    normal_rgb = normal * 0.5 + 0.5
+
+    # glTF ORM: R=AO, G=roughness, B=metallic。隙間を暗く、縁ほど粗くする。
+    occlusion = 0.985 - groove_mask * 0.50 - bevel_mask * 0.10
+    roughness = 0.25 + bevel_mask * 0.30 + groove_mask * 0.39 + wear_mask * 0.20
+    metallic = 0.915 - groove_mask * 0.025 - wear_mask * 0.070
+    orm_rgb = np.stack((occlusion, roughness, metallic), axis=-1)
+    return (
+        _save_data_texture("chrono-duelist-armour-normal-2048", normal_rgb),
+        _save_data_texture("chrono-duelist-armour-orm-2048", orm_rgb),
+    )
+
+
+def create_cloth_surface_textures() -> tuple[bpy.types.Image, bpy.types.Image]:
+    """Keep cloth tactile with a weak weave; it must not inherit hard armour seams."""
+
+    size = 1024
+    coordinates = (np.arange(size, dtype=np.float32) + 0.5) / size
+    u, v = np.meshgrid(coordinates, coordinates)
+    weave = np.sin(u * math.tau * 76.0) * np.sin(v * math.tau * 62.0) * 0.009
+    gradient_y, gradient_x = np.gradient(weave)
+    normal = np.stack((-gradient_x * 8.0, -gradient_y * 8.0, np.ones_like(weave)), axis=-1)
+    normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
+    normal_rgb = normal * 0.5 + 0.5
+    cloth_orm = np.stack(
+        (np.full_like(weave, 0.97), np.full_like(weave, 0.85), np.full_like(weave, 0.03)),
+        axis=-1,
+    )
+    return (
+        _save_data_texture("chrono-duelist-cloth-normal-1024", normal_rgb),
+        _save_data_texture("chrono-duelist-cloth-orm-1024", cloth_orm),
+    )
+
+
+def create_hero_detail_textures() -> dict[str, tuple[bpy.types.Image, bpy.types.Image]]:
+    return {
+        "armour": create_armour_surface_textures(),
+        "cloth": create_cloth_surface_textures(),
+    }
+
+
+def attach_surface_detail_nodes(material, normal_texture, orm_texture) -> None:
+    """Connect tangent normals and a shared glTF ORM image to a Principled material."""
+
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = nodes.get("Principled BSDF")
+    if bsdf is None:
+        raise RuntimeError(f"{material.name} has no Principled BSDF")
+    for node_name in (
+        f"{material.name}Normal", f"{material.name}NormalMap", f"{material.name}ORM",
+        f"{material.name}ORMChannels", f"{material.name}glTFOutput",
+    ):
+        if node := nodes.get(node_name):
+            nodes.remove(node)
+    if normal_texture:
+        normal_texture.colorspace_settings.name = "Non-Color"
+        normal_node = nodes.new("ShaderNodeTexImage")
+        normal_node.name = f"{material.name}Normal"
+        normal_node.image = normal_texture
+        normal_node.interpolation = "Linear"
+        normal_map = nodes.new("ShaderNodeNormalMap")
+        normal_map.name = f"{material.name}NormalMap"
+        normal_map.space = "TANGENT"
+        normal_map.inputs["Strength"].default_value = 1.25 if material.name.endswith("V2") else 1.0
+        links.new(normal_node.outputs["Color"], normal_map.inputs["Color"])
+        links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+    if orm_texture:
+        orm_texture.colorspace_settings.name = "Non-Color"
+        orm_node = nodes.new("ShaderNodeTexImage")
+        orm_node.name = f"{material.name}ORM"
+        orm_node.image = orm_texture
+        orm_node.interpolation = "Linear"
+        # Blender 5.x は旧 SeparateRGB を SeparateColor(RGB mode) に統合した。
+        channels = nodes.new("ShaderNodeSeparateColor")
+        channels.name = f"{material.name}ORMChannels"
+        channels.mode = "RGB"
+        links.new(orm_node.outputs["Color"], channels.inputs["Color"])
+        links.new(channels.outputs["Green"], bsdf.inputs["Roughness"])
+        links.new(channels.outputs["Blue"], bsdf.inputs["Metallic"])
+        # Blender glTF exporter はこの名前の node group の Occlusion 入力を正本として出力する。
+        group = bpy.data.node_groups.get("glTF Material Output")
+        if group is None:
+            from io_scene_gltf2.blender.com.material_helpers import create_settings_group
+
+            group = create_settings_group("glTF Material Output")
+        gltf_output = nodes.new("ShaderNodeGroup")
+        gltf_output.name = f"{material.name}glTFOutput"
+        gltf_output.node_tree = group
+        links.new(channels.outputs["Red"], gltf_output.inputs["Occlusion"])
+
+
+HERO_MATERIAL_SPECS = {
+    "VoidClothV2": {
+        # 黒に見せるのは照明側に任せ、布地にも織り目が残る下限の albedo を持たせる。
+        "base": (0.042, 0.063, 0.133, 1),
+        "metallic": 0.02,
+        "roughness": 0.86,
+        "texture": ("void-cloth-basecolor", (0.084, 0.119, 0.228), 142, {"weave": True}),
+        "detail": "cloth",
+    },
+    "MidnightFabricV2": {
+        "base": (0.063, 0.133, 0.301, 1),
+        "metallic": 0.04,
+        "roughness": 0.88,
+        "texture": ("midnight-fabric-basecolor", (0.112, 0.231, 0.455), 287, {"weave": True}),
+        "detail": "cloth",
+    },
+    "MidnightArmourV2": {
+        # 3.5 倍の中間調ガンメタル。黒を塗るのではなく IBL とリムで黒く見せる。
+        "base": (0.182, 0.273, 0.413, 1),
+        "metallic": 0.80,
+        "roughness": 0.30,
+        "coat": 0.30,
+        "texture": ("midnight-armour-basecolor", (0.182, 0.273, 0.413), 911, {"scratches": True}),
+        "detail": "armour",
+    },
+    "DarkSteelV2": {
+        # テクスチャなしの第二装甲も主装甲と同じ可読域へ（旧値の約 3.5 倍）。
+        "base": (0.161, 0.224, 0.301, 1),
+        "metallic": 0.85,
+        "roughness": 0.42,
+        "coat": 0.15,
+        "detail": "armour",
+    },
+    "AntiqueClockGoldV2": {
+        # The illustrative dark-silver RGB would only reach 0.376 luminance.
+        # This is still the subdued trim, but clears the >= 0.45 readability
+        # floor required by the deliberately dark arena lighting.
+        "base": (0.40, 0.46, 0.55, 1),
+        "metallic": 0.9,
+        "roughness": 0.20,
+        "coat": 0.25,
+        # The material identifier is stable for downstream assignment; the
+        # texture itself is now dark silver, not gold.
+        "texture": ("dark-silver-trim-basecolor", (0.43, 0.49, 0.59), 733, {"scratches": True}),
+        "detail": "armour",
+    },
+    "PolishedClockGoldV2": {
+        "base": (0.74, 0.80, 0.90, 1),
+        "metallic": 0.94,
+        "roughness": 0.14,
+        "coat": 0.35,
+        "detail": "armour",
+    },
+    "TimeCrystalV2": {
+        "base": (0.018, 0.24, 0.36, 1),
+        "metallic": 0.12,
+        "roughness": 0.12,
+        # #22d3ee cyan, at the established restrained crystal strength.
+        "emission": (0.018, 0.50, 0.68),
+        "emission_strength": 0.72,
+        "coat": 0.38,
+    },
+    "TimeEyeV2": {
+        "base": (0.025, 0.38, 0.52, 1),
+        "metallic": 0.0,
+        "roughness": 0.08,
+        "emission": (0.025, 0.68, 0.88),
+        "emission_strength": 1.55,
+        "coat": 0.6,
+    },
+}
+
+
+def create_demonic_hero_materials() -> dict[str, bpy.types.Material]:
+    """Create the eight role-preserving materials for a clean Blender scene."""
+
+    textures = {
+        name: create_surface_texture(texture_name, color, seed=seed, **options)
+        for name, spec in HERO_MATERIAL_SPECS.items()
+        if (texture_spec := spec.get("texture")) is not None
+        for texture_name, color, seed, options in (texture_spec,)
+    }
+    detail_textures = create_hero_detail_textures()
+    return {
+        name: pbr_material(
+            name,
+            spec["base"],
+            metallic=spec["metallic"],
+            roughness=spec["roughness"],
+            emission=spec.get("emission"),
+            emission_strength=spec.get("emission_strength", 0.0),
+            coat=spec.get("coat", 0.0),
+            texture=textures.get(name),
+            normal_texture=detail_textures.get(spec.get("detail"), (None, None))[0],
+            orm_texture=detail_textures.get(spec.get("detail"), (None, None))[1],
+        )
+        for name, spec in HERO_MATERIAL_SPECS.items()
+    }
+
+
+def refresh_demonic_hero_materials_in_place() -> None:
+    """Recolour the checked-in MPFB source without altering its rig or meshes."""
+
+    missing = sorted(name for name in HERO_MATERIAL_SPECS if bpy.data.materials.get(name) is None)
+    if missing:
+        raise RuntimeError(f"hero source is missing required materials: {', '.join(missing)}")
+
+    textures = {
+        name: create_surface_texture(texture_name, color, seed=seed, **options)
+        for name, spec in HERO_MATERIAL_SPECS.items()
+        if (texture_spec := spec.get("texture")) is not None
+        for texture_name, color, seed, options in (texture_spec,)
+    }
+    detail_textures = create_hero_detail_textures()
+    for name, spec in HERO_MATERIAL_SPECS.items():
+        material = bpy.data.materials[name]
+        material.diffuse_color = spec["base"]
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        bsdf = nodes.get("Principled BSDF")
+        if bsdf is None:
+            raise RuntimeError(f"{name} has no Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = spec["base"]
+        bsdf.inputs["Metallic"].default_value = spec["metallic"]
+        bsdf.inputs["Roughness"].default_value = spec["roughness"]
+        coat_input = bsdf.inputs.get("Coat Weight") or bsdf.inputs.get("Clearcoat")
+        if coat_input:
+            coat_input.default_value = spec.get("coat", 0.0)
+        emission_input = bsdf.inputs.get("Emission Color") or bsdf.inputs.get("Emission")
+        strength_input = bsdf.inputs.get("Emission Strength")
+        if spec.get("emission"):
+            if emission_input:
+                emission_input.default_value = (*spec["emission"], 1.0)
+            if strength_input:
+                strength_input.default_value = spec["emission_strength"]
+        elif strength_input:
+            strength_input.default_value = 0.0
+
+        texture = textures.get(name)
+        if texture:
+            base_color_node = nodes.get(f"{name}BaseColor")
+            if base_color_node is None or base_color_node.type != "TEX_IMAGE":
+                raise RuntimeError(f"{name} is missing its named base-colour image node")
+            base_color_node.image = texture
+        if detail := detail_textures.get(spec.get("detail")):
+            attach_surface_detail_nodes(material, *detail)
 
 
 def activate(obj) -> None:
@@ -414,92 +830,15 @@ def create_time_blade(name: str, sign: int, cyan, steel, gold, armature, hand_bo
 
 
 def create_custom_geometry(armature):
-    cloth_texture = create_surface_texture(
-        "void-cloth-basecolor",
-        (0.018, 0.026, 0.045),
-        seed=142,
-        weave=True,
-    )
-    blue_cloth_texture = create_surface_texture(
-        "midnight-fabric-basecolor",
-        (0.022, 0.065, 0.14),
-        seed=287,
-        weave=True,
-    )
-    armour_texture = create_surface_texture(
-        "midnight-armour-basecolor",
-        (0.018, 0.085, 0.19),
-        seed=911,
-        scratches=True,
-    )
-    gold_texture = create_surface_texture(
-        "antique-gold-basecolor",
-        (0.56, 0.27, 0.06),
-        seed=733,
-        scratches=True,
-    )
-    cloth = pbr_material(
-        "VoidClothV2",
-        (0.003, 0.007, 0.016, 1),
-        metallic=0.02,
-        roughness=0.86,
-        texture=cloth_texture,
-    )
-    cloth_blue = pbr_material(
-        "MidnightFabricV2",
-        (0.006, 0.018, 0.052, 1),
-        metallic=0.04,
-        roughness=0.72,
-        texture=blue_cloth_texture,
-    )
-    armour = pbr_material(
-        "MidnightArmourV2",
-        (0.006, 0.028, 0.075, 1),
-        metallic=0.74,
-        roughness=0.28,
-        coat=0.24,
-        texture=armour_texture,
-    )
-    armour_dark = pbr_material(
-        "DarkSteelV2",
-        (0.006, 0.012, 0.022, 1),
-        metallic=0.82,
-        roughness=0.28,
-        coat=0.18,
-    )
-    gold = pbr_material(
-        "AntiqueClockGoldV2",
-        (0.44, 0.19, 0.035, 1),
-        metallic=0.9,
-        roughness=0.23,
-        coat=0.2,
-        texture=gold_texture,
-    )
-    gold_highlight = pbr_material(
-        "PolishedClockGoldV2",
-        (0.82, 0.48, 0.12, 1),
-        metallic=0.92,
-        roughness=0.16,
-        coat=0.3,
-    )
-    cyan = pbr_material(
-        "TimeCrystalV2",
-        (0.002, 0.055, 0.22, 1),
-        metallic=0.12,
-        roughness=0.12,
-        emission=(0.01, 0.34, 1.0),
-        emission_strength=0.72,
-        coat=0.38,
-    )
-    eye = pbr_material(
-        "TimeEyeV2",
-        (0.005, 0.2, 0.5, 1),
-        metallic=0.0,
-        roughness=0.08,
-        emission=(0.0, 0.48, 1.0),
-        emission_strength=1.55,
-        coat=0.6,
-    )
+    materials = create_demonic_hero_materials()
+    cloth = materials["VoidClothV2"]
+    cloth_blue = materials["MidnightFabricV2"]
+    armour = materials["MidnightArmourV2"]
+    armour_dark = materials["DarkSteelV2"]
+    gold = materials["AntiqueClockGoldV2"]
+    gold_highlight = materials["PolishedClockGoldV2"]
+    cyan = materials["TimeCrystalV2"]
+    eye = materials["TimeEyeV2"]
 
     torso = loft_mesh(
         "DuelistBody",
