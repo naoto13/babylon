@@ -1128,7 +1128,10 @@ def process(name: str) -> None:
     mesh.data.materials.append(material)
     for polygon in mesh.data.polygons:
         polygon.material_index = 0
-    wings = create_back_wings(mesh)
+    # 翼は廃止した。薄い開放構造は image-to-3D が立体に起こせず、テクスチャが
+    # 体に貼り付いて輪郭を濁らせるため、三面図の時点で作らない方針に変えた。
+    # 補助メッシュとしても足さない（hero 用のこの処理が全キャラに混入していた）。
+    wings: tuple[bpy.types.Object, ...] = ()
     glb_bytes = export_glb(mesh, output_glb, wings)
     preview_bytes = {
         "front": render_preview(mesh, preview_paths["front"], Vector((0.0, 1.0, 0.0)), wings),

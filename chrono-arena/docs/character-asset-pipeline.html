@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>キャラクターアセット制作パイプライン — Chrono Arena</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif; line-height: 1.75; color: #1f2933; background: #f6f7f9; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+      header, section { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 28px; margin: 0 0 16px; }
+      header { border-top: 4px solid #2563eb; }
+      h1 { margin: 0 0 8px; font-size: 1.7rem; line-height: 1.3; }
+      h2 { margin: 0 0 16px; font-size: 1.25rem; line-height: 1.3; padding-bottom: 8px; border-bottom: 2px solid #e1e6ef; }
+      h3 { margin: 24px 0 8px; font-size: 1.05rem; line-height: 1.4; color: #334155; }
+      h3:first-of-type { margin-top: 0; }
+      p, ul, ol { margin: 0 0 12px; }
+      ul, ol { padding-left: 1.4em; }
+      li { margin-bottom: 4px; }
+      code { background: #eef2f7; padding: 0.12em 0.4em; border-radius: 4px; font-size: 0.9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; }
+      pre code { background: none; padding: 0; color: inherit; }
+      table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 0.94rem; }
+      th, td { border-bottom: 1px solid #e1e6ef; padding: 10px 12px; text-align: left; vertical-align: top; }
+      th { background: #f8fafc; font-weight: 600; white-space: nowrap; }
+      .scroll { overflow-x: auto; }
+      .note { border-left: 4px solid #2563eb; background: #eff6ff; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      .warn { border-left: 4px solid #dc2626; background: #fef2f2; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      .ok { border-left: 4px solid #16a34a; background: #f0fdf4; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      nav ol { columns: 2; column-gap: 32px; }
+      nav a { color: #2563eb; text-decoration: none; }
+      nav a:hover { text-decoration: underline; }
+      footer { color: #64748b; font-size: 0.9rem; text-align: center; padding: 8px; }
+      .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+      .flow span { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 14px; font-size: 0.92rem; }
+      .flow em { color: #94a3b8; font-style: normal; }
+      @media (max-width: 720px) {
+        header, section { padding: 18px; }
+        nav ol { columns: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>キャラクターアセット制作パイプライン</h1>
+        <p>
+          Chrono Arena のキャラクターを「ねんどろいど風デフォルメの三面図」から
+          リグ付き 3D アセットまで作る手順と、そこに至るまでの実測知見をまとめる。
+          写実系の参照画像から作る初期案は品質が要求に届かず打ち切った。その失敗も
+          再発防止のために記録する。
+        </p>
+      </header>
+
+      <nav>
+        <h2>目次</h2>
+        <ol>
+          <li><a href="#pipeline">パイプライン全体</a></li>
+          <li><a href="#prompt">画像生成プロンプトの定型</a></li>
+          <li><a href="#scripts">スクリプトと実行手順</a></li>
+          <li><a href="#numbers">品質の判定基準（実測値）</a></li>
+          <li><a href="#pitfalls">落とし穴</a></li>
+          <li><a href="#rig">リグの設計</a></li>
+          <li><a href="#verify">検証の作法</a></li>
+          <li><a href="#status">到達点と残課題</a></li>
+        </ol>
+      </nav>
+
+      <section id="pipeline">
+        <h2>1. パイプライン全体</h2>
+
+        <div class="flow">
+          <span>三面図を生成</span><em>→</em>
+          <span>正面を切り出す</span><em>→</em>
+          <span>SPAR3D で 3D 化</span><em>→</em>
+          <span>Voxel Remesh</span><em>→</em>
+          <span>UV 再展開</span><em>→</em>
+          <span>三面図を投影</span><em>→</em>
+          <span>リグ＋スキニング</span>
+        </div>
+
+        <p>
+          各工程は独立したスクリプトになっており、途中から再実行できる。
+          新しいキャラクターを追加する場合も同じ手順をなぞれば足りる。
+        </p>
+
+        <div class="note">
+          <strong>なぜデフォルメなのか。</strong>
+          image-to-3D は「見えている面を立体に起こす」処理なので、参照画像の情報量が
+          多いほど推測の余地が増えて破綻する。写実系の高精細な参照画像では、
+          テクスチャが白飛びして意匠が消え、実機では「のっぺりした黒い塊」になった。
+          デフォルメは形状の情報量が少ないぶん生成が正確になり、
+          本作のようにキャラが画面高の約 1/10 しか占めないゲームでは
+          シルエットが読めることのほうが効く。
+        </div>
+      </section>
+
+      <section id="prompt">
+        <h2>2. 画像生成プロンプトの定型</h2>
+
+        <p>
+          成果物の品質はここでほぼ決まる。以下の 4 ブロックは省略すると必ず破綻する。
+          <code>gen-image</code> スキル（codex 経由の gpt-image-2）で使う。
+        </p>
+
+        <h3>共通様式（全キャラで一字一句共有する）</h3>
+        <pre><code>ねんどろいど（Nendoroid）風のデフォルメ3Dフィギュアのキャラクターデザイン三面図。
+頭身は約2.5頭身で、頭が大きく体は小さく、全体に丸みのあるフォルム。
+手足は短くずんぐりしている。ディテールは大胆に省略し、少ない要素で意匠が読めるようにする。
+写実的な3Dレンダーの質感で、マットな樹脂とつや消し金属のフィギュアとして描く。
+
+【姿勢の絶対条件】必ず A ポーズにする。両腕を体側から左右へ約45度開き、
+腕・脇・手のすべてが胴体から明確に離れて、腕と胴の間に背景がはっきり見える隙間を作る。
+左右の脚も肩幅以上に開き、脚と脚の間にも背景の隙間を作る。
+3つのビューとも同じ A ポーズにする。腕を体にくっつけたり、脚を閉じたりしてはならない。
+
+【構図の絶対条件】1枚の画像の中に、同一キャラクターを
+「正面向き」「真横向き（右を向く）」「背面向き」の順に左から右へ、
+ちょうど3体だけ横一列に並べる。3体はすべて同じ高さ・同じ縮尺。
+正投影（パースなし）。3体の間には背景がはっきり見える広い間隔を空ける。
+
+【造形の絶対条件】すべての部位を厚みのある塊（ソリッド）として造形する。
+板状・膜状・薄片・半透明の要素は一切作らない。
+禁止: 翼、羽根、マント、なびく布、ケープ、リボン、鎖、触手、細い紐、
+透明や半透明のパーツ、格子、透かし彫り、細長く飛び出す装飾。
+装飾は本体に密着した厚い装甲か丸みのある塊で表現する。
+角だけは例外だが、太く短い円錐形の塊にする。
+
+【厳禁】4体以上並べること。歩行や走行などの連続したポーズ。
+ピクセルアート・ドット絵・2Dイラスト。文字・矢印・ロゴ。影・床・グリッド線。武器や持ち物。
+
+背景は均一な明るいグレー。全体をやや明るめの露出で描き、
+黒い部位も真っ黒に潰さず面の形が読める明度を保つ。
+
+意匠は「ハイテク・オカルト」（黒曜石と暗銀の未来装甲に発光する魔法回路が走る SF＋悪魔）。</code></pre>
+
+        <h3>各ブロックが必要な理由</h3>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>ブロック</th><th>省くとどうなるか</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>姿勢（A ポーズ）</td>
+                <td>腕を体側に下ろした姿勢だと SPAR3D が接触部を繋いでしまい、リグを入れたとき腕を動かすと胴が引っ張られて破綻する。T ポーズは真横から見ると腕が手前に突き出て体を隠すため、側面ビューからの投影が効かなくなる。A ポーズが最適。</td>
+              </tr>
+              <tr>
+                <td>構図（三面図）</td>
+                <td>「横一列に並べる」とだけ書くと、生成器が<strong>歩行アニメーションのスプライトシート</strong>を返してくる（実際に boss で発生）。「ちょうど3体だけ」「連続したポーズ禁止」の明記が要る。</td>
+              </tr>
+              <tr>
+                <td>造形（ソリッド）</td>
+                <td>翼・マント・薄い布は image-to-3D が立体に起こせず、テクスチャとして体に貼り付いて輪郭を濁らせる。<strong>画像の時点で作らせないのが唯一の確実な回避策</strong>。</td>
+              </tr>
+              <tr>
+                <td>露出（明るめ）</td>
+                <td>暗い意匠をそのまま渡すと SPAR3D のテクスチャベイクが部分的に、あるいは完全に失敗する（実測: 非黒率 0.06%＝ほぼ空のアトラス）。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="warn">
+          <strong>生成器が指示を無視することがある。</strong>
+          まったく無関係な画像（ピクセルアートの猫、緑のフード弓使いの走行スプライト）が
+          返ってきた実績がある。透過率チェックも重複検出も通過して「正常終了」扱いになるため、
+          <strong>生成後は必ず目視する</strong>。失敗したら禁止事項を明記して再生成する。
+        </div>
+      </section>
+
+      <section id="scripts">
+        <h2>3. スクリプトと実行手順</h2>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>スクリプト</th><th>役割</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>scripts/crop_turnaround_front.py</code></td><td>三面図から正面ビューだけを切り出し、正方形にパディングする。背景色の推定、3ビューの分離、被写体の輝度チェックまで行う。</td></tr>
+              <tr><td><code>scripts/spar3d-run.sh</code></td><td>SPAR3D のラッパー。テクスチャ解像度を制御でき、複数画像をバッチ処理する。実行前にネイティブ拡張の CPU カーネル登録を診断する。</td></tr>
+              <tr><td><code>scripts/project_turnaround_texture.py</code></td><td>三面図の 3 ビューを法線方向に応じてメッシュへ投影し、テクスチャを作り直す。SPAR3D が推測で埋めた背面・側面を正しい意匠に置き換える。</td></tr>
+              <tr><td><code>scripts/rig_nendo_character.py</code></td><td>Voxel Remesh → UV 再展開 → テクスチャ投影 → 16 ボーンのリグ構築 → 幾何ベースのスキニング → 検証ポーズのレンダー。</td></tr>
+              <tr><td><code>scripts/generate_arena_environment.py</code></td><td>アリーナの雰囲気を反映した IBL 環境マップ（equirectangular HDR）を生成する。</td></tr>
+              <tr><td><code>tools/asset-preview.html</code></td><td>本編と同じアリーナ・カメラ・ライティング・GlowLayer でモデルを確認する検証ページ。新旧の比較、5 体並列表示に対応。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>実行例（新キャラを 1 体作る）</h3>
+        <pre><code># 1. 三面図を生成（上記プロンプトを使う）
+#    → assets/production/demonic/turnarounds/&lt;name&gt;.png
+
+# 2. 正面を切り出す
+python3 scripts/crop_turnaround_front.py &lt;name&gt;
+
+# 3. SPAR3D で 3D 化（1体あたり 20〜60秒、ピークメモリ約15GB）
+TEXRES=1024 ./scripts/spar3d-run.sh assets/production/demonic/spar3d-nendo \
+  assets/production/demonic/refs/&lt;name&gt;-nendo-front.png
+
+# 4. 投影とリグの入力位置へ配置
+cp assets/production/demonic/spar3d-nendo/&lt;name&gt;-nendo-front.glb \
+   assets/production/demonic/spar3d/&lt;name&gt;-nendo.glb
+
+# 5. リメッシュ・UV・投影・リグを一括で
+blender --background --factory-startup --python-exit-code 1 \
+  --python scripts/rig_nendo_character.py -- &lt;name&gt;-nendo
+
+# 6. 検証
+node ~/.claude/skills/image-to-3d-asset/scripts/check-glb.mjs \
+  assets/production/demonic/rigged/&lt;name&gt;-nendo-rigged.glb</code></pre>
+
+        <div class="note">
+          リグが不要で静的メッシュだけ欲しい場合は、5 の代わりに
+          <code>project_turnaround_texture.py</code> を単体で実行する。
+          出力は <code>assets/production/demonic/nendo/</code> に入る。
+        </div>
+      </section>
+
+      <section id="numbers">
+        <h2>4. 品質の判定基準（実測値）</h2>
+
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>指標</th><th>基準</th><th>根拠</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>三面図の被写体平均輝度</td>
+                <td>0.20 以上（最低 0.15）</td>
+                <td>0.15 を下回るとテクスチャベイクが失敗しやすい。実測で 0.28 前後なら安定して成功する。</td>
+              </tr>
+              <tr>
+                <td>生成テクスチャの非黒率</td>
+                <td>50% 以上</td>
+                <td>成功時は 52〜64%。失敗時は 0.06%（ほぼ空）や 19.8%（部分的）になる。<code>check-glb.mjs</code> はこれを見ないので別途測る。</td>
+              </tr>
+              <tr>
+                <td>充填率（体積÷bbox体積）</td>
+                <td>デフォルメで 28〜37%</td>
+                <td>塊で構成された造形の正常値。写実系の細身キャラでは 5〜10% だった。</td>
+              </tr>
+              <tr>
+                <td>baseColor の平均輝度</td>
+                <td>0.26〜0.34</td>
+                <td>本編のライティングは暗い（HemisphericLight 0.92 ＋ DirectionalLight 1.4、fog EXP2 0.014）。0.11〜0.16 で作ると実機で真っ黒な塊になる。</td>
+              </tr>
+              <tr>
+                <td>発光面積</td>
+                <td>2〜5.5%</td>
+                <td>GlowLayer（intensity 0.62）と合わさるため、広くすると全身が発光色に染まって装甲の色分けが見えなくなる。</td>
+              </tr>
+              <tr>
+                <td>ボーン数</td>
+                <td>16</td>
+                <td>ねんどろいど体型では人体比率のボーン数を入れると関節が分離しない（後述）。</td>
+              </tr>
+              <tr>
+                <td>面数</td>
+                <td>hero 60,000 以下／敵は 15,000〜20,000 目安</td>
+                <td>敵は最大 74 体が同時に出現し、全メッシュが影のキャスターに登録される。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="pitfalls">
+        <h2>5. 落とし穴</h2>
+
+        <h3>SPAR3D はアルベドを一定明度に正規化する</h3>
+        <p>
+          暗い意匠（黒い装甲＋発光ライン）を渡すと出力テクスチャが白飛びして意匠が失われる。
+          <strong>参照画像側では解決できない</strong>。実測: 参照画像を gamma 0.45 で持ち上げて
+          平均輝度 0.216 → 0.453 にしても、出力テクスチャの平均輝度は 0.383 → 0.369 とほぼ不変だった。
+          白飛びしたテクスチャの彩度を上げて色を戻そうとすると、カラフルなノイズになって破綻する。
+        </p>
+
+        <h3>出力メッシュは非連結サーフェスに断片化している</h3>
+        <p>
+          見た目は繋がっていても、内部的には多数の独立した面の集まりになっている（hero で 1,386 個）。
+          Blender の自動ウェイト（Bone Heat）は連結メッシュ上の熱拡散を解く方式なので、
+          この状態では安定したウェイトが出せず、腕を上げると脇から扇状の伸び面が出る。
+          <strong>リグの前に Voxel Remesh で単一連結体にすることが前提条件</strong>。
+          リメッシュで元の UV は失われるため、UV 再展開とテクスチャ再投影がセットで必要になる。
+        </p>
+
+        <h3>三面図の 3 ビュー分離は連結成分だけでは失敗する</h3>
+        <p>
+          体の間隔が狭いキャラでは背景の列が一本も残らず、隣の体とつながって検出される。
+          対策は<strong>列ごとの被写体ピクセル数の谷（＝体の切れ目）で分割し直す</strong>こと。
+          <code>crop_turnaround_front.py</code> と <code>project_turnaround_texture.py</code> の
+          両方に実装が要る（片方だけ直すともう片方で同じエラーが出る）。
+        </p>
+
+        <h3>Blender のプレビューで明暗を判断してはいけない</h3>
+        <p>
+          Blender で「ちょうどよい」明るさにすると、本編のライティングでは大幅に沈む。
+          逆に、意匠照合のために明るい背景でレンダーすると、正しいテクスチャが白飛びして
+          「壊れている」と誤診する。どちらも実際に起きた。
+          <strong>明暗の判断は必ず <code>tools/asset-preview.html</code>（本編と同条件）で行う</strong>。
+        </p>
+
+        <h3>albedo を黒くしすぎると何を足しても見えない</h3>
+        <p>
+          ノーマルマップ・ORM マップ・IBL をすべて入れても装甲がのっぺりしたままだった原因は、
+          albedo が黒すぎたことだった。albedo を 5 倍にした瞬間にパネル分割・トリム・
+          フードの構造が一気に読めるようになった。
+          <strong>AAA 級のゲームでも黒い鎧を真っ黒には塗らず、中間調のガンメタルにして
+          環境光とリムライトで黒く見せる</strong>。
+        </p>
+
+        <h3>金属は「映すもの」がないと金属に見えない</h3>
+        <p>
+          PBR において金属の見た目はほぼ全てが環境の反射である。
+          <code>scene.environmentTexture</code> が無い状態で metallic 0.8〜0.94 を設定しても、
+          反射する対象がないため単色の平面として描画される。IBL の導入は工数が小さく効果が最も大きい。
+        </p>
+      </section>
+
+      <section id="rig">
+        <h2>6. リグの設計</h2>
+
+        <h3>16 ボーン構成</h3>
+        <pre><code>Root
+└─ Hips → Spine → Chest → Neck → Head
+   ├─ UpperArm.L → LowerArm.L      （肩当ては UpperArm、拳は LowerArm に含める）
+   ├─ UpperArm.R → LowerArm.R
+   ├─ UpperLeg.L → LowerLeg.L → Foot.L
+   └─ UpperLeg.R → LowerLeg.R → Foot.R</code></pre>
+
+        <div class="warn">
+          <strong>デフォルメに人体と同じボーン数を入れると破綻する。</strong>
+          ねんどろいど体型は腕長が全高の 2 割程度しかないため、
+          Shoulder / UpperArm / LowerArm / Hand の 4 ボーンだと 1 本あたり数センチになり、
+          ウェイトが混ざって関節が分離しない（腕を上げるポーズと肘を曲げるポーズが
+          ほぼ同じ見た目になる）。腕は 2 分割に減らす。
+          ねんどろいどの実物も肘関節を持たないものが多く、造形の考え方とも合う。
+          脚は歩行に膝が要るので 3 段を維持する。
+        </div>
+
+        <h3>ウェイトは幾何ベースで計算する</h3>
+        <ul>
+          <li>各ボーンを線分（head → tail）として扱い、頂点からの最短距離 d を求める</li>
+          <li>ウェイト <code>w = 1 / (d + eps)^p</code>（p は 3〜5）</li>
+          <li>上位 4 ボーンだけ残して正規化（glTF の 4 骨上限）</li>
+          <li>左右の取り違えを防ぐため、頂点の X 座標の符号で割り当て先を制限する</li>
+          <li>頭部は Head ボーンに 1.0 で固定する（デフォルメは頭が大きく、胴のウェイトを拾いやすい）</li>
+        </ul>
+
+        <h3>ボーン位置の比率（全高を 1.0 として足元から）</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>部位</th><th>高さ</th><th>部位</th><th>高さ</th></tr></thead>
+            <tbody>
+              <tr><td>足首</td><td>0.06</td><td>胸</td><td>0.46</td></tr>
+              <tr><td>膝</td><td>0.16</td><td>肩</td><td>0.54</td></tr>
+              <tr><td>股</td><td>0.28</td><td>首</td><td>0.58</td></tr>
+              <tr><td>腰</td><td>0.34</td><td>頭中心</td><td>0.78</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          頂点分布からの自動推定は、頭が全高の 4 割を占めるデフォルメでは外れる。
+          体型比率を定数として持つほうが確実。
+        </p>
+      </section>
+
+      <section id="verify">
+        <h2>7. 検証の作法</h2>
+
+        <div class="warn">
+          <strong>統計だけを合格条件にすると「パス詐欺」が起きる。</strong>
+          実例: 参照画像をメッシュへ投影する実装で、彩度と色相ビン数の統計はパスしたが、
+          実際は baseColor の 1 つの UV 島に全身像がそのまま貼られており投影は破綻していた。
+          統計は「色が複数あるか」しか測れず「正しい位置にあるか」を測らない。
+        </div>
+
+        <h3>作業を委任するときの条件設定</h3>
+        <ul>
+          <li><strong>位置の正しさが要件なら、生成物の画像を必ず自分で見る。</strong>数値指標で代替しない</li>
+          <li><strong>リグの検証は「破綻がないこと」ではなく「ポーズごとに形が明確に変わること」を条件にする。</strong>比較すべき 2 枚を指定し、どこがどう違うかを具体的に述べさせる</li>
+          <li>ポーズの振り幅は大きくとる（腕上げは 60 度でなく 90 度、肘は下位ボーンだけを 90 度曲げて上位は固定）</li>
+          <li>テクスチャを貼った状態でレンダーさせる（グレーの粘土状態では破綻が見えにくい）</li>
+        </ul>
+
+        <h3>ブラウザでの実機確認</h3>
+        <p>
+          <code>tools/asset-preview.html</code> に <code>window.__preview</code> を露出してあるので、
+          <code>javascript_tool</code> からマテリアルやライトを直接書き換えて原因を切り分けられる。
+          Blender で再生成して往復するより桁違いに速い（実測: 3 回の再生成で分からなかった原因が
+          JS 2 本で確定した）。
+        </p>
+        <pre><code>// albedo が原因かを 1 行で切り分ける
+const s = window.__preview.scene;
+s.materials.forEach(m =&gt; m.albedoColor?.scaleInPlace(5));
+s.render(); s.render();</code></pre>
+
+        <div class="note">
+          <strong>タブが非アクティブだとスクリーンショットが真っ黒になる。</strong>
+          Chrome が <code>requestAnimationFrame</code> を止めるため
+          <code>engine.runRenderLoop</code> が回らない。コンソールエラーは出ず、
+          <code>engine.getFps()</code> は最後の値を返すので誤診しやすい。
+          <code>scene.getActiveMeshes().length</code> が 0 なら描画が止まっている。
+          スクショ直前に <code>scene.render()</code> を手動で 2 回呼べば正しく撮れる。
+        </div>
+      </section>
+
+      <section id="status">
+        <h2>8. 到達点と残課題</h2>
+
+        <div class="ok">
+          <strong>確立できたこと。</strong>
+          三面図からリグ付き 3D アセットまでの全工程がスクリプト化され、
+          新キャラの追加は同じ手順で通せる。hero で end-to-end の実証を完了した。
+        </div>
+
+        <h3>現在の成果物</h3>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>場所</th><th>内容</th></tr></thead>
+            <tbody>
+              <tr><td><code>assets/production/demonic/turnarounds/</code></td><td>ねんどろいど風の三面図 5 体（意匠の正本）</td></tr>
+              <tr><td><code>assets/production/demonic/nendo/</code></td><td>静的メッシュ 5 体（テクスチャ投影済み、リグなし）</td></tr>
+              <tr><td><code>assets/production/demonic/rigged/</code></td><td>リグ付き hero（16 ボーン、2.49MB、59,800面）と検証ポーズ 5 枚</td></tr>
+              <tr><td><code>assets/production/models/</code></td><td>現行の本編モデル。配色を SF＋悪魔へ改修済み。リグとアニメーションは従来のまま</td></tr>
+              <tr><td><code>assets/production/env/</code></td><td>アリーナの IBL 環境マップ</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>本編の状態</h3>
+        <p>
+          本編は<strong>現行モデル（配色改修済み）で動作している</strong>。
+          ねんどろいど版はまだ組み込んでいない。シーン側には IBL・ACES トーンマッピング・
+          SSAO・リムライトを導入済みで、これは新旧どちらのモデルにも効く。
+        </p>
+
+        <h3>残課題</h3>
+        <ul>
+          <li><strong>造形の粗さ</strong> — Voxel Remesh の代償で腕が溶けており、上腕と前腕の段差や指が潰れている。本編の俯瞰カメラでは判別できないが、近接カットを入れるなら作り直しが要る</li>
+          <li><strong>敵 4 体のリグ</strong> — 静的メッシュはあるがリグ未着手。同じパイプラインで通せる</li>
+          <li><strong>アニメーション</strong> — 16 ボーンのリグができたので、Idle / Run / Attack / Dash / Hit / FutureSlash を作れる状態</li>
+          <li><strong>本編への組み込み</strong> — <code>src/main.js</code> の <code>assetPaths</code> 差し替えとスケール調整で切り替わる。<code>loadModelAssets()</code> はアニメーションクリップが揃わないと throw する設計なので、アニメーションが先に要る</li>
+        </ul>
+
+        <h3>打ち切った経路（再挑戦しないため）</h3>
+        <ul>
+          <li><strong>写実系の参照画像からの生成</strong> — テクスチャが白飛びして意匠が消え、実機で現行モデルに及ばなかった。3 方式（そのまま利用／単色ティント／参照画像投影）すべて失敗</li>
+          <li><strong>Mixamo でのオートリグ</strong> — Adobe ログインが必須でエージェント側から実行できず、2.5 頭身が人型と認識されるかも不確実。自前リグで代替した</li>
+        </ul>
+      </section>
+
+      <footer>
+        Chrono Arena — キャラクターアセット制作パイプライン / 2026-07-29 作成
+      </footer>
+    </main>
+  </body>
+</html>

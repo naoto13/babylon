@@ -33,9 +33,10 @@ const FLOOR_Y = -0.025;
 const models = Object.freeze({
   hero: {
     label: "Hero",
-    newPath: new URL("../assets/production/demonic/nendo/hero-nendo.glb", import.meta.url).href,
+    // リグ付き版（Voxel Remesh → UV再展開 → 三面図投影 → 16ボーン）。身長1.8m基準。
+    newPath: new URL("../assets/production/demonic/rigged/hero-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
-    newScale: 3.4,
+    newScale: 1.9,
     oldScale: 1.32
   },
   chaser: {
