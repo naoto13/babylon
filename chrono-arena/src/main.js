@@ -99,11 +99,14 @@ const modelContainers = new Map();
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
   environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
-  heroModel: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
-  chaserModel: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
-  shooterModel: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
-  thiefModel: new URL("../assets/production/models/enemy-thief-concept.glb", import.meta.url).href,
-  bossModel: new URL("../assets/production/models/enemy-boss-concept.glb", import.meta.url).href
+  // ねんどろいど風デフォルメ版（三面図 → SPAR3D → リメッシュ → 16骨リグ → アニメーション）。
+  // 制作手順は docs/character-asset-pipeline.html を参照。
+  // 旧モデル（assets/production/models/*.glb）はロールバック用に残してある。
+  heroModel: new URL("../assets/production/demonic/animated/hero-nendo-animated.glb", import.meta.url).href,
+  chaserModel: new URL("../assets/production/demonic/animated/chaser-nendo-animated.glb", import.meta.url).href,
+  shooterModel: new URL("../assets/production/demonic/animated/shooter-nendo-animated.glb", import.meta.url).href,
+  thiefModel: new URL("../assets/production/demonic/animated/thief-nendo-animated.glb", import.meta.url).href,
+  bossModel: new URL("../assets/production/demonic/animated/boss-nendo-animated.glb", import.meta.url).href
 });
 
 const cooldownDurations = Object.freeze({
@@ -351,7 +354,9 @@ function createPlayer() {
 
   const modelAnchor = new TransformNode("player-model-anchor", scene);
   modelAnchor.parent = root;
-  modelAnchor.scaling.setAll(1.32);
+  // ねんどろいど版は身長 1.8m に正規化済み。旧モデル（bbox 高さ 2.58 × 1.32）と
+  // 同じ見かけの大きさになるよう検証ページで合わせた値。
+  modelAnchor.scaling.setAll(1.9);
   modelAnchor.rotation.y = Math.PI;
 
   const heroContainer = modelContainers.get("hero");
@@ -590,7 +595,9 @@ function createEnemyModel(type, id) {
   );
   const root = new TransformNode(`${type}-${id}`, scene);
   for (const node of instance.rootNodes) node.parent = root;
-  const scale = { chaser: 1.28, shooter: 1.24, thief: 1.28, boss: 1.42 }[type];
+  // ねんどろいど版は全員 身長 1.8m に正規化済みなので、この係数がそのまま
+  // 画面上の大きさを決める。検証ページ（tools/asset-preview.html）で合わせた値。
+  const scale = { chaser: 1.5, shooter: 1.8, thief: 1.7, boss: 2.2 }[type];
   root.scaling.setAll(scale);
   root.rotation.y = Math.PI;
   root.metadata = { scale };
