@@ -1,4 +1,11 @@
 import "@babylonjs/loaders/glTF/2.0/glTFLoader.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_mesh_quantization.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_meshopt_compression.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_texture_webp.js";
+// gltfpack は UV を量子化する代わりに KHR_texture_transform でスケールを補正する。
+// この拡張は extensionsRequired には入らないため、未登録だとローダーがエラーを出さず
+// 黙って無視し、テクスチャのサンプリング位置だけがずれて別モデルのように見える。
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_texture_transform.js";
 
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
@@ -204,14 +211,21 @@ const LIGHTNING_STRIKE_VISUAL = Object.freeze({
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
   environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
-  // ねんどろいど風デフォルメ版（三面図 → SPAR3D → リメッシュ → 16骨リグ → アニメーション）。
+  // ねんどろいど風デフォルメ版（三面図 → 画像→3D → リメッシュ → 16骨リグ → アニメーション）。
   // 制作手順は docs/character-asset-pipeline.html を参照。
-  // 旧モデル（assets/production/models/*.glb）はロールバック用に残してある。
-  heroModel: new URL("../assets/production/demonic/animated/hero-nendo-animated.glb", import.meta.url).href,
-  chaserModel: new URL("../assets/production/demonic/animated/chaser-nendo-animated.glb", import.meta.url).href,
-  shooterModel: new URL("../assets/production/demonic/animated/shooter-nendo-animated.glb", import.meta.url).href,
-  thiefModel: new URL("../assets/production/demonic/animated/thief-nendo-animated.glb", import.meta.url).href,
-  bossModel: new URL("../assets/production/demonic/animated/boss-nendo-animated.glb", import.meta.url).href,
+  // 旧モデル（enemy-*-concept.glb / chrono-duelist-custom.glb）はロールバック用に残してある。
+  //
+  // 5体すべて画像→3DをTRELLIS.2に差し替えた高精細版。SPAR3D版（demonic/animated/
+  // *-nendo-animated.glb）もロールバック用に残してある。
+  //
+  // TRELLIS.2版はテクスチャ解像度が高く非圧縮では §12 の予算（主人公 約3.2MB、
+  // 敵 1.5MB）を超えるため、gltfpack で圧縮した models/ 側を読む。圧縮すると
+  // glTF 拡張が増えるので、読み込み側の import 追加も必要になる（冒頭を参照）。
+  heroModel: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,
+  chaserModel: new URL("../assets/production/models/chaser-nendo-trellis2.glb", import.meta.url).href,
+  shooterModel: new URL("../assets/production/models/shooter-nendo-trellis2.glb", import.meta.url).href,
+  thiefModel: new URL("../assets/production/models/thief-nendo-trellis2.glb", import.meta.url).href,
+  bossModel: new URL("../assets/production/models/boss-nendo-trellis2.glb", import.meta.url).href,
   // 演出用は1回だけロードして、ParticleSystem と固定板プールで共有する。
   flameSheet: new URL("../assets/production/effects/flame-sheet.png", import.meta.url).href,
   smokeSheet: new URL("../assets/production/effects/smoke-sheet.png", import.meta.url).href,

@@ -44,7 +44,16 @@ def requested_name() -> str:
     if len(arguments) != 1:
         raise RuntimeError("Expected one bare name, for example: -- hero-nendo")
     name = arguments[0]
-    if name not in {"hero-nendo", "chaser-nendo", "shooter-nendo", "thief-nendo", "boss-nendo"}:
+    # *-nendo-trellis2 は画像→3DをSPAR3DからTRELLIS.2へ差し替えた版。
+    # リグ規約（16骨・EXPECTED_BONES）は同じなので、このスクリプトのモーションが
+    # そのまま流用できる。
+    if name not in {
+        "hero-nendo", "hero-nendo-trellis2",
+        "chaser-nendo", "chaser-nendo-trellis2",
+        "shooter-nendo", "shooter-nendo-trellis2",
+        "thief-nendo", "thief-nendo-trellis2",
+        "boss-nendo", "boss-nendo-trellis2",
+    }:
         raise RuntimeError(f"Unsupported nendoroid name: {name!r}")
     return name
 
@@ -517,9 +526,17 @@ def main() -> None:
         raise RuntimeError(f"Missing rigged source GLB: {source}")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output = OUTPUT_DIR / f"{name}-animated.glb"
-    is_hero = name == "hero-nendo"
+    is_hero = name.startswith("hero-nendo")
     expected_clips = HERO_CLIPS if is_hero else ENEMY_CLIPS
-    budget = 3 * 1024 * 1024 if is_hero else int(1.5 * 1024 * 1024)
+    # TRELLIS.2版はテクスチャ解像度が高く、この非圧縮GLBの時点では本来の予算を
+    # 超える。gltfpackで圧縮した models/ 側が本編の読み込み対象なので、ここでは
+    # 中間生成物として緩い上限で通し、圧縮後のサイズで予算を守る。
+    if name.endswith("-nendo-trellis2"):
+        budget = 8 * 1024 * 1024
+    elif is_hero:
+        budget = 3 * 1024 * 1024
+    else:
+        budget = int(1.5 * 1024 * 1024)
     log(f"START blender={bpy.app.version_string} source={source} expected={','.join(expected_clips)}")
     clear_scene()
     bpy.ops.import_scene.gltf(filepath=str(source))
