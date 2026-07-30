@@ -190,8 +190,10 @@ const effectQuality = {
 const LIGHTNING_STRIKE_VISUAL = Object.freeze({
   telegraphOuterWidth: 0.82,
   telegraphCoreWidth: LIGHTNING_STRIKE_CONFIG.width,
-  beamOuterWidth: 0.76,
-  beamCoreWidth: 0.28,
+  // 発動のビームは予兆より太くする。0.76/0.28 では予兆(0.82/0.5)より細く、
+  // 走った瞬間が細い光の筋にしか見えなかった（実機で確認）。
+  beamOuterWidth: 1.15,
+  beamCoreWidth: 0.42,
   telegraphOuterY: 0.036,
   telegraphCoreY: 0.052,
   beamOuterY: 0.11,
