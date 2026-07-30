@@ -2,4 +2,11 @@ tools/spar3d/venv/
 tools/spar3d/hf-cache/
 tools/spar3d/repo/
 tools/spar3d/output/
+tools/trellis2/downloads/
+tools/trellis2/ComfyUI_windows_portable/
+tools/trellis2/python312/
+tools/trellis2/venv/
+tools/trellis2/ComfyUI/
+tools/trellis2/secrets/
+tools/trellis2/comparison/
 .pnpm-store/

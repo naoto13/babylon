@@ -26,7 +26,7 @@ pnpm assets:validate
 pnpm check
 ```
 
-主人公を再生成する場合は、Blender 4.2以降へMPFB2 v2.0.17を有効化してから実行します。
+主人公を土台から再生成する場合は、Blender 4.2以降へMPFB2 v2.0.17を有効化してから実行します。MPFB2が利用できない環境では、チェックイン済みの主人公正本を使い、リグ・ウェイト・アニメーションを保持した材質更新とGLB再出力のみを行います。
 
 ```bash
 pnpm assets:build:hero
