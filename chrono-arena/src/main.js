@@ -180,19 +180,21 @@ const effectQuality = {
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
   environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
-  // ねんどろいど風デフォルメ版（三面図 → SPAR3D → リメッシュ → 16骨リグ → アニメーション）。
+  // ねんどろいど風デフォルメ版（三面図 → 画像→3D → リメッシュ → 16骨リグ → アニメーション）。
   // 制作手順は docs/character-asset-pipeline.html を参照。
-  // 旧モデル（assets/production/models/*.glb）はロールバック用に残してある。
+  // 旧モデル（enemy-*-concept.glb / chrono-duelist-custom.glb）はロールバック用に残してある。
   //
-  // 主人公だけは画像→3DをTRELLIS.2に差し替えた高精細版で、他4体と違い gltfpack で
-  // 圧縮した成果物を読む。TRELLIS.2はテクスチャ解像度が高く非圧縮では6.1MBあり
-  // §12 の主人公予算 約3.2MB を超えるため、圧縮が必須（878KB まで落ちる）。
-  // 圧縮すると glTF 拡張が増えるので、読み込み側の import 追加も必要になる。
+  // 5体すべて画像→3DをTRELLIS.2に差し替えた高精細版。SPAR3D版（demonic/animated/
+  // *-nendo-animated.glb）もロールバック用に残してある。
+  //
+  // TRELLIS.2版はテクスチャ解像度が高く非圧縮では §12 の予算（主人公 約3.2MB、
+  // 敵 1.5MB）を超えるため、gltfpack で圧縮した models/ 側を読む。圧縮すると
+  // glTF 拡張が増えるので、読み込み側の import 追加も必要になる（冒頭を参照）。
   heroModel: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,
-  chaserModel: new URL("../assets/production/demonic/animated/chaser-nendo-animated.glb", import.meta.url).href,
-  shooterModel: new URL("../assets/production/demonic/animated/shooter-nendo-animated.glb", import.meta.url).href,
-  thiefModel: new URL("../assets/production/demonic/animated/thief-nendo-animated.glb", import.meta.url).href,
-  bossModel: new URL("../assets/production/demonic/animated/boss-nendo-animated.glb", import.meta.url).href,
+  chaserModel: new URL("../assets/production/models/chaser-nendo-trellis2.glb", import.meta.url).href,
+  shooterModel: new URL("../assets/production/models/shooter-nendo-trellis2.glb", import.meta.url).href,
+  thiefModel: new URL("../assets/production/models/thief-nendo-trellis2.glb", import.meta.url).href,
+  bossModel: new URL("../assets/production/models/boss-nendo-trellis2.glb", import.meta.url).href,
   // 演出用は1回だけロードして、ParticleSystem と固定板プールで共有する。
   flameSheet: new URL("../assets/production/effects/flame-sheet.png", import.meta.url).href,
   smokeSheet: new URL("../assets/production/effects/smoke-sheet.png", import.meta.url).href,

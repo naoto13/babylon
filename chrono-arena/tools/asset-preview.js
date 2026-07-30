@@ -57,8 +57,12 @@ const models = Object.freeze({
     label: "Chaser",
     newPath: new URL("../assets/production/demonic/rigged/chaser-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/chaser-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/chaser-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.5,
-    oldScale: 1.28
+    oldScale: 1.28,
+    trellis2Scale: 1.5,
+    packedScale: 1.5
   },
   shooter: {
     label: "Shooter",

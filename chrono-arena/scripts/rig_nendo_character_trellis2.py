@@ -75,14 +75,52 @@ def remesh_keeping_all_parts(mesh: bpy.types.Object) -> None:
     から解析的にウェイトを出す ``geometric_distance_weights`` を使っている。
     距離計算は純粋に位置ベースなので島が複数あっても正しく効く。よって連結性は
     ここでは不要な制約であり、島を残す方が正しい。
+
+    とはいえ 1 島にできるならその方が見た目が良い（島の隙間が穴として見える）。
+    TRELLIS.2 の出力は数万個の面の断片でできており（chaser は 23,353 島）、
+    ボクセルを粗くするほど隣接面が融合して島が減る。ただし粗すぎると細い部位が
+    削れて逆に分断されるため、一点狙いでは決まらない。人型3体は 0.5% で 1 島に
+    なるが、獣型 chaser は首が細く 0.5% では 8 島残った。そこで複数の粗さを試し、
+    1 島になった中で最も細かいもの（＝ディテールを最大限残せるもの）を採用する。
     """
     base = base_module()
     height = base.bounds_for_mesh(mesh).size.z
     before = len(base.topology_components(mesh)[1])
-    voxel_size = height * 0.005
-    modifier = mesh.modifiers.new("Trellis2VoxelRemesh", "REMESH")
+    candidates = tuple(height * ratio for ratio in (0.005, 0.007, 0.009, 0.012, 0.015))
+    original_data = mesh.data.copy()
+    results: list[tuple[float, int, int]] = []
+    chosen: float | None = None
+
+    for attempt, voxel_size in enumerate(candidates, start=1):
+        mesh.data = original_data.copy()
+        modifier = mesh.modifiers.new(f"Trellis2VoxelRemesh{attempt}", "REMESH")
+        modifier.mode = "VOXEL"
+        modifier.voxel_size = voxel_size
+        modifier.use_smooth_shade = True
+        base.activate_only([mesh], mesh)
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        base.remove_floating_fragments(mesh)
+        components = base.topology_components(mesh)[1]
+        significant = sum(len(c) > base.FRAGMENT_MAX_VERTICES for c in components)
+        triangles = base.triangle_count(mesh)
+        results.append((voxel_size, significant, triangles))
+        log(
+            f"REMESH_ATTEMPT attempt={attempt} voxel_size={voxel_size:.5f} "
+            f"ratio={voxel_size / height:.4%} significant={significant} triangles={triangles}"
+        )
+        if significant == 1 and chosen is None:
+            chosen = voxel_size
+
+    if chosen is None:
+        # どれも 1 島にならない場合は、島数が最少の候補を採る。島が残っても
+        # 幾何距離ウェイトは効くので、頭を捨てるより残す方がよい。
+        chosen = min(results, key=lambda r: (r[1], r[0]))[0]
+        log(f"REMESH_KEEP_ALL fallback=fewest_components voxel_size={chosen:.5f}")
+
+    mesh.data = original_data.copy()
+    modifier = mesh.modifiers.new("Trellis2VoxelRemeshSelected", "REMESH")
     modifier.mode = "VOXEL"
-    modifier.voxel_size = voxel_size
+    modifier.voxel_size = chosen
     modifier.use_smooth_shade = True
     base.activate_only([mesh], mesh)
     bpy.ops.object.modifier_apply(modifier=modifier.name)
@@ -91,7 +129,7 @@ def remesh_keeping_all_parts(mesh: bpy.types.Object) -> None:
     components = base.topology_components(mesh)[1]
     significant = sum(len(c) > base.FRAGMENT_MAX_VERTICES for c in components)
     log(
-        f"REMESH_KEEP_ALL voxel_size={voxel_size:.5f} ratio={voxel_size / height:.4%} "
+        f"REMESH_KEEP_ALL voxel_size={chosen:.5f} ratio={chosen / height:.4%} "
         f"components_before={before} components_after={len(components)} "
         f"significant={significant} triangles={base.triangle_count(mesh)}"
     )
