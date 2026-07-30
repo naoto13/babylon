@@ -261,8 +261,14 @@ function getEffectColor(colorHex) {
   return effectColorCache.get(colorHex);
 }
 
+// 演出時間の倍率。撮影で一瞬の演出を捉えるため visual-test では既定60倍に延ばすが、
+// ?slow=1 のように指定すれば実際の見え方（等倍）で確認できる。
+const visualSlowFactor = visualTestMode
+  ? Math.max(1, Number(new URLSearchParams(window.location.search).get("slow") ?? 60))
+  : 1;
+
 function getEffectDuration(duration) {
-  return visualTestMode ? duration * 60 : duration;
+  return duration * visualSlowFactor;
 }
 
 function createMaterial(name, diffuseHex, emissiveHex = diffuseHex, emissiveStrength = 0.18) {
@@ -479,9 +485,9 @@ function createPlayer() {
 
   const modelAnchor = new TransformNode("player-model-anchor", scene);
   modelAnchor.parent = root;
-  // ねんどろいど版は身長 1.8m に正規化済み。旧モデル（bbox 高さ 2.58 × 1.32）と
-  // 同じ見かけの大きさになるよう検証ページで合わせた値。
-  modelAnchor.scaling.setAll(1.9);
+  // ねんどろいど版は身長 1.8m に正規化済み。1.9 だと頭の大きい体型のぶん画面占有が
+  // 過大で、中央のリングをはみ出した。実機で 1.9 / 1.65 / 1.45 を比べて 1.65 を採用。
+  modelAnchor.scaling.setAll(1.65);
   modelAnchor.rotation.y = Math.PI;
 
   const heroContainer = modelContainers.get("hero");
