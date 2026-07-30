@@ -64,22 +64,34 @@ const models = Object.freeze({
     label: "Shooter",
     newPath: new URL("../assets/production/demonic/rigged/shooter-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/shooter-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/shooter-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.8,
-    oldScale: 1.24
+    oldScale: 1.24,
+    trellis2Scale: 1.8,
+    packedScale: 1.8
   },
   thief: {
     label: "Thief",
     newPath: new URL("../assets/production/demonic/rigged/thief-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-thief-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/thief-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/thief-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.7,
-    oldScale: 1.28
+    oldScale: 1.28,
+    trellis2Scale: 1.7,
+    packedScale: 1.7
   },
   boss: {
     label: "Boss",
     newPath: new URL("../assets/production/demonic/rigged/boss-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-boss-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/boss-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/boss-nendo-trellis2.glb", import.meta.url).href,
     newScale: 2.2,
-    oldScale: 1.42
+    oldScale: 1.42,
+    trellis2Scale: 2.2,
+    packedScale: 2.2
   }
 });
 
@@ -215,7 +227,11 @@ function initScene() {
 }
 
 const SETS = Object.freeze(["trellis2", "packed", "new", "old"]);
-const MOTIONS = Object.freeze(["none", "Idle", "Run", "Attack", "Dash", "Hit", "FutureSlash"]);
+// 主人公は Run/Dash/FutureSlash、敵は Move/Death を持つ。相手が持たないクリップを
+// 選んでも applyMotion が無視するだけなので、両方まとめて並べておく。
+const MOTIONS = Object.freeze([
+  "none", "Idle", "Run", "Move", "Attack", "Dash", "Hit", "Death", "FutureSlash"
+]);
 
 function readSettings() {
   const query = new URLSearchParams(window.location.search);

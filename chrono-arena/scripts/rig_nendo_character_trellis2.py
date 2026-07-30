@@ -63,6 +63,67 @@ def base_module():
     return module
 
 
+def remesh_keeping_all_parts(mesh: bpy.types.Object) -> None:
+    """本体が複数の島に分かれていても、島を捨てずにリメッシュする。
+
+    ベースの ``remesh_for_deformation`` は単一連結体を作れなかった場合
+    ``keep_largest_component`` に退避するため、頭が胴と繋がっていない相手
+    （chaser は TRELLIS.2 出力の時点で頭と胴が別島）だと頭が丸ごと消える。
+
+    単一連結体が必要なのは Blender の Bone Heat 自動ウェイトの都合だが、この
+    パイプラインは ``bind_armature_directly`` でそれを無効化し、骨線分までの距離
+    から解析的にウェイトを出す ``geometric_distance_weights`` を使っている。
+    距離計算は純粋に位置ベースなので島が複数あっても正しく効く。よって連結性は
+    ここでは不要な制約であり、島を残す方が正しい。
+    """
+    base = base_module()
+    height = base.bounds_for_mesh(mesh).size.z
+    before = len(base.topology_components(mesh)[1])
+    voxel_size = height * 0.005
+    modifier = mesh.modifiers.new("Trellis2VoxelRemesh", "REMESH")
+    modifier.mode = "VOXEL"
+    modifier.voxel_size = voxel_size
+    modifier.use_smooth_shade = True
+    base.activate_only([mesh], mesh)
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+    # 8頂点程度の微小片だけを落とし、頭や角のような意味のある島は残す。
+    base.remove_floating_fragments(mesh)
+    components = base.topology_components(mesh)[1]
+    significant = sum(len(c) > base.FRAGMENT_MAX_VERTICES for c in components)
+    log(
+        f"REMESH_KEEP_ALL voxel_size={voxel_size:.5f} ratio={voxel_size / height:.4%} "
+        f"components_before={before} components_after={len(components)} "
+        f"significant={significant} triangles={base.triangle_count(mesh)}"
+    )
+
+
+def decimate_allowing_parts(mesh: bpy.types.Object) -> None:
+    """面数だけを予算に収める。連結数のチェックはしない（上の理由と同じ）。"""
+    base = base_module()
+    before = base.triangle_count(mesh)
+    if before <= base.MAX_FACES:
+        log(f"DECIMATE_PARTS skipped triangles={before} limit={base.MAX_FACES}")
+        return
+    base.activate_only([mesh], mesh)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.quads_convert_to_tris(quad_method="BEAUTY", ngon_method="BEAUTY")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    triangulated = base.triangle_count(mesh)
+    modifier = mesh.modifiers.new("Trellis2FaceBudget", "DECIMATE")
+    modifier.ratio = min(1.0, (base.MAX_FACES - 200) / triangulated)
+    base.activate_only([mesh], mesh)
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+    after = base.triangle_count(mesh)
+    components = len(base.topology_components(mesh)[1])
+    log(
+        f"DECIMATE_PARTS triangles_before={before} triangles_after_triangulate={triangulated} "
+        f"triangles_after={after} limit={base.MAX_FACES} components_after={components}"
+    )
+    if after > base.MAX_FACES:
+        raise RuntimeError(f"Decimation budget failure: triangles={after} > {base.MAX_FACES}")
+
+
 def smooth_for_unwrap(mesh: bpy.types.Object) -> None:
     """Extra coarsening pass, run after the base pipeline's connectivity-focused
     voxel remesh. That remesh only uses the finest voxel size that still yields
@@ -76,16 +137,75 @@ def smooth_for_unwrap(mesh: bpy.types.Object) -> None:
     Smart UV Project can unwrap into a handful of large islands instead of
     thousands of tiny ones.
     """
-    height = base_module().bounds_for_mesh(mesh).size.z
-    voxel_size = height * 0.018
-    base_module().activate_only([mesh], mesh)
-    modifier = mesh.modifiers.new("UnwrapSmoothRemesh", "REMESH")
+    base = base_module()
+    height = base.bounds_for_mesh(mesh).size.z
+    # 粗くするほどUVアイランドは減るが、ボクセルより細い部位（角・指・脚の付け根）は
+    # 削れて消え、メッシュが分断される。後段のウェイト計算とDECIMATEは単一連結体を
+    # 前提にしているので、ベースの remesh_for_deformation と同じやり方で候補を試し、
+    # 連結を保てた中で最も粗いものを採用する。全滅したらこの工程を丸ごと諦めて
+    # ベースの結果をそのまま使う（UVは細かくなるが壊れない方を選ぶ）。
+    candidates = tuple(height * ratio for ratio in (0.018, 0.014, 0.011, 0.009))
+    original_data = mesh.data.copy()
+    chosen: float | None = None
+
+    for attempt, voxel_size in enumerate(candidates, start=1):
+        mesh.data = original_data.copy()
+        modifier = mesh.modifiers.new(f"UnwrapSmoothRemesh{attempt}", "REMESH")
+        modifier.mode = "VOXEL"
+        modifier.voxel_size = voxel_size
+        modifier.adaptivity = 0.0
+        base.activate_only([mesh], mesh)
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        components = base.topology_components(mesh)[1]
+        significant = sum(len(c) > base.FRAGMENT_MAX_VERTICES for c in components)
+        log(
+            f"SMOOTH_ATTEMPT attempt={attempt} voxel_size={voxel_size:.5f} "
+            f"ratio={voxel_size / height:.4%} components={len(components)} "
+            f"significant={significant} triangles={base.triangle_count(mesh)}"
+        )
+        if significant == 1 and chosen is None:
+            chosen = voxel_size
+
+    if chosen is None:
+        mesh.data = original_data.copy()
+        log("SMOOTH_FOR_UNWRAP skipped=all_candidates_split_the_mesh")
+        return False
+
+    mesh.data = original_data.copy()
+    modifier = mesh.modifiers.new("UnwrapSmoothRemeshSelected", "REMESH")
     modifier.mode = "VOXEL"
-    modifier.voxel_size = voxel_size
+    modifier.voxel_size = chosen
     modifier.adaptivity = 0.0
+    base.activate_only([mesh], mesh)
     bpy.ops.object.modifier_apply(modifier=modifier.name)
-    components = base_module().topology_components(mesh)[1]
-    log(f"SMOOTH_FOR_UNWRAP voxel_size={voxel_size:.5f} triangles={base_module().triangle_count(mesh)} components={len(components)}")
+    base.remove_floating_fragments(mesh)
+    components = base.topology_components(mesh)[1]
+    log(
+        f"SMOOTH_FOR_UNWRAP voxel_size={chosen:.5f} ratio={chosen / height:.4%} "
+        f"triangles={base.triangle_count(mesh)} components={len(components)}"
+    )
+    return True
+
+
+def vertex_smooth_for_unwrap(mesh: bpy.types.Object) -> None:
+    """ボクセルを使えなかった相手向けの、間引き後に効かせる平滑化。
+
+    Smooth モディファイアは頂点を動かすだけでトポロジーを変えないので、細い首や
+    角を持つメッシュでも分断が起きない。ここで重要なのは順序で、DECIMATE の前に
+    かけても間引きが不規則な三角形を作って折れ角が復活してしまう。UV 展開の直前、
+    つまり最終メッシュに対してかけて初めて Smart UV Project の島数が減る。
+    """
+    base = base_module()
+    modifier = mesh.modifiers.new("UnwrapVertexSmooth", "SMOOTH")
+    modifier.factor = 1.0
+    modifier.iterations = 20
+    base.activate_only([mesh], mesh)
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+    components = base.topology_components(mesh)[1]
+    log(
+        "VERTEX_SMOOTH_FOR_UNWRAP iterations=20 "
+        f"triangles={base.triangle_count(mesh)} components={len(components)}"
+    )
 
 
 def smart_uv_project_wide(mesh: bpy.types.Object) -> None:
@@ -277,9 +397,9 @@ def main() -> None:
     source_ref = duplicate_mesh(mesh, f"{name}-bake-source")
     log(f"DUPLICATED source_ref={source_ref.name} for post-remesh baking")
 
-    base.remesh_for_deformation(mesh)
-    smooth_for_unwrap(mesh)
-    base.decimate_if_needed(mesh)
+    remesh_keeping_all_parts(mesh)
+    decimate_allowing_parts(mesh)
+    vertex_smooth_for_unwrap(mesh)
     smart_uv_project_wide(mesh)
     texture_path = bake_from_source(source_ref, mesh, name)
     bpy.data.objects.remove(source_ref, do_unlink=True)

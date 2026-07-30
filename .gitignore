@@ -14,4 +14,24 @@ tools/trellis2/comparison/
 tools/trellis2/blender-*/
 tools/trellis2/node-*/
 tools/trellis2/*.log
+
+# TRELLIS.2 由来の敵アセットの中間生成物。ゲームが読むのは gltfpack 圧縮後の
+# assets/production/models/*-nendo-trellis2.glb だけで、リグ直後の GLB とベイクした
+# baseColor は 1 体あたり 10MB 近くある。敵は 4 体いるので追跡すると一気に嵩む。
+# 作り直すときは scripts/rig_nendo_character_trellis2.py と
+# scripts/animate_nendo_character.py を再実行すれば同じものが得られる。
+# 主人公(hero-*)だけは看板アセットとして中間生成物も追跡している。
+chrono-arena/assets/production/demonic/spar3d/chaser-nendo-trellis2.glb
+chrono-arena/assets/production/demonic/spar3d/shooter-nendo-trellis2.glb
+chrono-arena/assets/production/demonic/spar3d/thief-nendo-trellis2.glb
+chrono-arena/assets/production/demonic/spar3d/boss-nendo-trellis2.glb
+chrono-arena/assets/production/demonic/rigged/chaser-nendo-trellis2-rigged*
+chrono-arena/assets/production/demonic/rigged/shooter-nendo-trellis2-rigged*
+chrono-arena/assets/production/demonic/rigged/thief-nendo-trellis2-rigged*
+chrono-arena/assets/production/demonic/rigged/boss-nendo-trellis2-rigged*
+chrono-arena/assets/production/demonic/animated/chaser-nendo-trellis2-animated.glb
+chrono-arena/assets/production/demonic/animated/shooter-nendo-trellis2-animated.glb
+chrono-arena/assets/production/demonic/animated/thief-nendo-trellis2-animated.glb
+chrono-arena/assets/production/demonic/animated/boss-nendo-trellis2-animated.glb
+
 .pnpm-store/

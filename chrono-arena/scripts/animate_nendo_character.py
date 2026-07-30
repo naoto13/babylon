@@ -44,12 +44,15 @@ def requested_name() -> str:
     if len(arguments) != 1:
         raise RuntimeError("Expected one bare name, for example: -- hero-nendo")
     name = arguments[0]
-    # hero-nendo-trellis2 は画像→3DをSPAR3DからTRELLIS.2へ差し替えた主人公。
+    # *-nendo-trellis2 は画像→3DをSPAR3DからTRELLIS.2へ差し替えた版。
     # リグ規約（16骨・EXPECTED_BONES）は同じなので、このスクリプトのモーションが
     # そのまま流用できる。
     if name not in {
         "hero-nendo", "hero-nendo-trellis2",
-        "chaser-nendo", "shooter-nendo", "thief-nendo", "boss-nendo",
+        "chaser-nendo", "chaser-nendo-trellis2",
+        "shooter-nendo", "shooter-nendo-trellis2",
+        "thief-nendo", "thief-nendo-trellis2",
+        "boss-nendo", "boss-nendo-trellis2",
     }:
         raise RuntimeError(f"Unsupported nendoroid name: {name!r}")
     return name
@@ -525,10 +528,10 @@ def main() -> None:
     output = OUTPUT_DIR / f"{name}-animated.glb"
     is_hero = name.startswith("hero-nendo")
     expected_clips = HERO_CLIPS if is_hero else ENEMY_CLIPS
-    # TRELLIS.2版はテクスチャ解像度が高く、この非圧縮GLBの時点では主人公予算を
+    # TRELLIS.2版はテクスチャ解像度が高く、この非圧縮GLBの時点では本来の予算を
     # 超える。gltfpackで圧縮した models/ 側が本編の読み込み対象なので、ここでは
-    # 中間生成物として通す（圧縮後は1MB未満に収まる）。
-    if name == "hero-nendo-trellis2":
+    # 中間生成物として緩い上限で通し、圧縮後のサイズで予算を守る。
+    if name.endswith("-nendo-trellis2"):
         budget = 8 * 1024 * 1024
     elif is_hero:
         budget = 3 * 1024 * 1024
