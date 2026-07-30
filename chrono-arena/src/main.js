@@ -599,6 +599,11 @@ function initScene() {
   });
   initEffectPools();
   applyQuality(qualitySelect.value);
+  // 開発時の演出確認用。カメラを引く・特定の状態を作るといった操作を
+  // ブラウザのコンソールから行えるようにする。本番ビルドでは露出しない。
+  if (visualTestMode) {
+    window.__game = { get scene() { return scene; }, get engine() { return engine; }, get camera() { return camera; }, get player() { return player; }, get enemies() { return enemies; } };
+  }
   return scene;
 }
 
