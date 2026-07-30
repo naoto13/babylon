@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 
 import {
   INITIAL_ENEMY_COUNT,
+  LIGHTNING_STRIKE_CONFIG,
   applyUpgrade,
+  canEnemyCastLightning,
   calculateRunRank,
   clampPointToCircle,
   findNearestTarget,
   formatRemainingTime,
   getEnemyCombatStats,
+  getLightningStrikeCooldown,
   getSpawnInterval,
+  isWithinLineSegmentRadius,
   isWithinHorizontalRadius,
   predictFuturePosition,
   shouldSpawnBoss
@@ -25,6 +29,25 @@ test("arena clamp preserves inner points and clamps outer points", () => {
 test("projectile collision ignores billboard height and uses the arena plane", () => {
   assert.equal(isWithinHorizontalRadius({ x: 0, y: 3, z: 0 }, { x: 0.8, y: 0, z: 0 }, 0.82), true);
   assert.equal(isWithinHorizontalRadius({ x: 0, y: 0, z: 0 }, { x: 0.83, y: 0, z: 0 }, 0.82), false);
+});
+
+test("lightning ownership is limited to a subset of shooters and every boss", () => {
+  assert.equal(LIGHTNING_STRIKE_CONFIG.shooterOwnershipChance, 0.25);
+  assert.equal(canEnemyCastLightning("shooter", 0.249), true);
+  assert.equal(canEnemyCastLightning("shooter", 0.25), false);
+  assert.equal(canEnemyCastLightning("boss", 1), true);
+  assert.equal(canEnemyCastLightning("chaser", 0), false);
+  assert.equal(canEnemyCastLightning("thief", 0), false);
+  assert.equal(getLightningStrikeCooldown(0), 6);
+  assert.equal(getLightningStrikeCooldown(1), 8);
+});
+
+test("lightning hit checks the fixed telegraph segment instead of a screen-aligned axis", () => {
+  const start = { x: -3, z: 4 };
+  const end = { x: 8, z: -7 };
+  assert.equal(isWithinLineSegmentRadius({ x: 1, z: 0 }, start, end, 0.76), true);
+  assert.equal(isWithinLineSegmentRadius({ x: 2.2, z: 0 }, start, end, 0.76), false);
+  assert.equal(isWithinLineSegmentRadius({ x: -4, z: 5 }, start, end, 0.76), false);
 });
 
 test("spawn interval accelerates but never exceeds the density floor", () => {
