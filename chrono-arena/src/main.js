@@ -94,6 +94,9 @@ const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)
 const visualTestMode = import.meta.env.DEV && new URLSearchParams(window.location.search).has("visual-test");
 const visualPreviewEnemy = visualTestMode ? new URLSearchParams(window.location.search).get("enemy-preview") : null;
 const visualPreviewEffect = visualTestMode ? new URLSearchParams(window.location.search).get("effect-preview") : null;
+const visualAutoStart = visualTestMode && new URLSearchParams(window.location.search).has("auto-start");
+const visualPreviewSwarm = visualTestMode ? Number(new URLSearchParams(window.location.search).get("swarm")) : 0;
+const visualPreviewCrowded = visualTestMode && new URLSearchParams(window.location.search).has("crowded");
 const keyState = new Set();
 const gamepadButtonState = new Map();
 const enemies = [];
@@ -685,8 +688,15 @@ function startRun() {
     disposeCollection(enemies);
     spawnVisualEnemyPreview(visualPreviewEnemy);
   }
+  if (visualPreviewSwarm > 0) spawnVisualSwarm(visualPreviewSwarm);
   // 実機撮影専用。通常ビルドでは到達せず、実装済みの共有テクスチャ経路だけを初期フレームで起動する。
   if (visualPreviewEffect && elementalPalette[visualPreviewEffect]) {
+    if (!visualPreviewSwarm) {
+      // 単体撮影では自動攻撃を止め、対象の余韻だけを画面で追えるようにする。
+      disposeCollection(enemies);
+      run.spawnClock = Number.POSITIVE_INFINITY;
+      run.attackClock = Number.POSITIVE_INFINITY;
+    }
     const previewPosition = player.position.clone();
     // 自機モデルに隠れない右前方の床で、実機撮影時だけ同じ演出を観測する。
     previewPosition.x += 3.2;
@@ -698,6 +708,7 @@ function startRun() {
       texturedEffects.spawnElementalImpact(previewPosition, visualPreviewEffect, lastMoveDirection);
     }
   }
+  if (visualPreviewCrowded) spawnCrowdedEffectPreview();
   playSound("ability");
   announce("60秒ラン開始。最も近い敵へ自動攻撃します。");
   canvas.focus({ preventScroll: true });
@@ -824,6 +835,41 @@ function spawnVisualEnemyPreview(type) {
   // visual-testでは生存固定を外し、衝突時の衝撃波まで実機画面で確認する。
   run.invulnerable = 0;
   return { id: enemy.id, type };
+}
+
+function spawnVisualSwarm(count = 12) {
+  if (phase !== "playing") return false;
+  // DEV撮影だけで密集時を再現する。通常ランの敵数・AI・戦闘値は変更しない。
+  disposeCollection(enemies);
+  const safeCount = Math.max(10, Math.min(24, Math.round(Number(count) || 12)));
+  const types = ["chaser", "shooter", "thief"];
+  for (let index = 0; index < safeCount; index += 1) {
+    const enemy = spawnEnemy(types[index % types.length], (index / safeCount) * Math.PI * 2, 5.7 + (index % 3) * 0.78);
+    if (!enemy) continue;
+    enemy.speed = 0;
+    enemy.shootCooldown = Number.POSITIVE_INFINITY;
+  }
+  run.spawnClock = Number.POSITIVE_INFINITY;
+  run.attackClock = Number.POSITIVE_INFINITY;
+  run.invulnerable = 999;
+  gameShell.dataset.visualEnemyCount = String(enemies.length);
+  return { enemies: enemies.length, phase };
+}
+
+function spawnCrowdedEffectPreview() {
+  if (phase !== "playing" || !texturedEffects || enemies.length < 10) return false;
+  // 実装済みの属性別バーストを敵位置で起動し、密集時の上限・簡略化を実機確認する。
+  const elements = ["fire", "lightning", "void", "chrono"];
+  for (const [index, enemy] of enemies.entries()) {
+    const element = elements[index % elements.length];
+    if (element === "chrono") texturedEffects.spawnChronoRift(enemy.mesh.position, 0.92);
+    else texturedEffects.spawnElementalImpact(enemy.mesh.position, element, lastMoveDirection);
+  }
+  const diagnostics = texturedEffects.getDiagnostics();
+  gameShell.dataset.visualEffectEvents = String(diagnostics.activeEffectEvents);
+  gameShell.dataset.visualGroundTraces = String(diagnostics.activeGroundTraces);
+  gameShell.dataset.visualParticleSystems = String(diagnostics.systems.length);
+  return { enemies: enemies.length, textured: diagnostics };
 }
 
 function createEffectMaterial(name, colorHex, alpha = 0.9, emissiveStrength = 1) {
@@ -3514,6 +3560,11 @@ function applyQuality(quality) {
   // lowでは同時エフェクト枠と火花を落とし、描画メッシュ数を確実に抑える。
   configureEffectQuality(quality);
   texturedEffects?.applyQuality(quality);
+  if (visualTestMode) {
+    const diagnostics = texturedEffects?.getDiagnostics();
+    gameShell.dataset.visualQuality = diagnostics?.quality ?? quality;
+    gameShell.dataset.visualScaleByElement = JSON.stringify(diagnostics?.scaleByElement ?? {});
+  }
   engine.resize();
 }
 
@@ -3615,6 +3666,12 @@ function installDevHarness() {
       },
       previewEnemyAttack(type = "shooter") {
         return spawnVisualEnemyPreview(type);
+      },
+      previewSwarm(count = 12) {
+        return spawnVisualSwarm(count);
+      },
+      previewCrowdedEffects() {
+        return spawnCrowdedEffectPreview();
       }
     })
   });
@@ -3629,6 +3686,7 @@ async function boot() {
   bindEvents();
   installDevHarness();
   setPhase("title");
+  if (visualAutoStart) startRun();
 
   scene.onBeforeRenderObservable.add(() => {
     try {
