@@ -44,7 +44,7 @@ const models = Object.freeze({
     newPath: new URL("../assets/production/demonic/rigged/hero-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
     // TRELLIS.2版はアニメーション込みの成果物を見たいので -animated を指す。
-    trellis2Path: new URL("../assets/production/demonic/rigged/hero-nendo-trellis2-animated.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/hero-nendo-trellis2-animated.glb", import.meta.url).href,
     // gltfpack 圧縮後の、本編が実際に読む GLB。圧縮で見た目が変わっていないかを
     // 同じライティング下で直接比較できるようにしておく。
     packedPath: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,

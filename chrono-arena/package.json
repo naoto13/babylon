@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "assets:build": "blender --background --factory-startup --python-exit-code 1 --python scripts/build_blender_assets.py",
+    "assets:build:effects": "python3 scripts/generate_effect_textures.py",
     "assets:build:hero": "blender --background --python-exit-code 1 --python scripts/build_mpfb_hero.py",
     "assets:refresh:hero:materials": "blender --background --python-exit-code 1 --python scripts/build_mpfb_hero.py -- --materials-only",
     "assets:build:enemies:hd": "blender --background --factory-startup --python-exit-code 1 --python scripts/build_high_detail_enemies.py",

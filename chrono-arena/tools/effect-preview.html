@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050914" />
+    <meta
+      name="description"
+      content="Chrono Arena のテクスチャ付きエフェクト素材を、ゲームに近い合成条件で確認するページ"
+    />
+    <title>Chrono Arena — Effect Preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font: 100%/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #050914;
+        color: #edf7ff;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 15% -5%, rgb(34 211 238 / 0.11), transparent 27rem),
+          #050914;
+      }
+
+      a { color: #8cecff; }
+      a:hover { color: #d6f8ff; }
+      button, select, input { font: inherit; }
+
+      .page-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 3vw, 3rem) 0.75rem;
+        border-bottom: 1px solid rgb(156 223 255 / 0.18);
+        background: rgb(5 9 20 / 0.84);
+        box-shadow: 0 0.6rem 1.7rem rgb(0 0 0 / 0.17);
+        backdrop-filter: blur(18px) saturate(150%);
+      }
+
+      .header-content,
+      main { width: min(92rem, 100%); margin: 0 auto; }
+
+      .breadcrumb {
+        display: inline-flex;
+        gap: 0.35rem;
+        align-items: center;
+        color: #a9c9da;
+        font-size: 0.77rem;
+        font-weight: 650;
+        letter-spacing: 0.035em;
+      }
+
+      h1, h2, h3, p { margin-top: 0; }
+
+      h1 {
+        margin: 0.25rem 0 0;
+        font-size: clamp(1.45rem, 3.2vw, 2.35rem);
+        line-height: 1.07;
+        letter-spacing: -0.035em;
+      }
+
+      .intro {
+        max-width: 55rem;
+        margin: 0.45rem 0 0;
+        color: #b7d1df;
+        font-size: 0.9rem;
+      }
+
+      main { padding: 1.25rem clamp(1rem, 3vw, 3rem) 3rem; }
+
+      .control-panel {
+        display: grid;
+        grid-template-columns: minmax(14rem, 1fr) minmax(13rem, 1fr) minmax(12rem, 1fr) minmax(11rem, 0.8fr);
+        gap: 0.8rem;
+        align-items: end;
+        margin-bottom: 1.15rem;
+        padding: 1rem;
+        border: 1px solid rgb(163 224 255 / 0.23);
+        border-radius: 1rem;
+        background: rgb(12 29 48 / 0.7);
+        box-shadow: 0 1rem 2.4rem rgb(0 0 0 / 0.2);
+      }
+
+      .control-panel label,
+      .control-panel .toggle-control {
+        display: grid;
+        gap: 0.28rem;
+        color: #bcd7e8;
+        font-size: 0.72rem;
+        font-weight: 760;
+        letter-spacing: 0.065em;
+      }
+
+      select {
+        width: 100%;
+        min-height: 2.45rem;
+        border: 1px solid rgb(172 224 255 / 0.3);
+        border-radius: 0.58rem;
+        padding: 0.35rem 0.55rem;
+        background: #102a43;
+        color: #f5fbff;
+      }
+
+      select:focus-visible,
+      input:focus-visible,
+      a:focus-visible {
+        outline: 2px solid #78e9ff;
+        outline-offset: 3px;
+      }
+
+      .toggle-control { min-height: 2.45rem; }
+      .switch-row {
+        display: flex;
+        gap: 0.55rem;
+        align-items: center;
+        min-height: 2.45rem;
+        padding: 0.3rem 0.45rem;
+        border: 1px solid rgb(172 224 255 / 0.3);
+        border-radius: 0.58rem;
+        background: #102a43;
+        color: #f5fbff;
+        letter-spacing: 0;
+      }
+
+      input[type="checkbox"] { inline-size: 1.1rem; block-size: 1.1rem; accent-color: #22d3ee; }
+
+      .status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 0.9rem;
+        align-items: center;
+        margin: 0 0 1.25rem;
+        color: #b9d4e4;
+        font-size: 0.82rem;
+      }
+
+      .status strong { color: #eafaff; }
+      .status [data-state="error"] { color: #ffb1bb; }
+
+      .legend {
+        margin: 0 0 1.3rem;
+        padding: 0.8rem 1rem;
+        border-left: 3px solid #22d3ee;
+        border-radius: 0 0.7rem 0.7rem 0;
+        background: rgb(15 47 70 / 0.48);
+        color: #bdd8e5;
+        font-size: 0.83rem;
+      }
+
+      .legend strong { color: #f0fbff; }
+
+      .section-heading {
+        display: flex;
+        gap: 0.8rem;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 1.5rem 0 0.75rem;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.1rem;
+        letter-spacing: -0.012em;
+      }
+
+      .section-heading p { margin: 0; color: #a6c5d6; font-size: 0.78rem; }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+        gap: 1rem;
+      }
+
+      .effect-card {
+        overflow: hidden;
+        border: 1px solid rgb(154 215 248 / 0.2);
+        border-radius: 1rem;
+        background: rgb(9 23 39 / 0.82);
+        box-shadow: 0 0.7rem 1.75rem rgb(0 0 0 / 0.19);
+      }
+
+      .effect-card[data-kind="sheet"] { grid-column: span 1; }
+      .card-header { padding: 0.9rem 1rem 0; }
+
+      h3 {
+        margin: 0;
+        color: #f4fbff;
+        font-size: 0.99rem;
+        line-height: 1.2;
+        letter-spacing: -0.012em;
+      }
+
+      .file-name {
+        margin: 0.24rem 0 0;
+        color: #8bbbd2;
+        font: 0.73rem/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .preview-stage {
+        position: relative;
+        display: grid;
+        min-height: 15.25rem;
+        place-items: center;
+        margin: 0.85rem 1rem;
+        overflow: hidden;
+        border: 1px solid rgb(205 240 255 / 0.15);
+        border-radius: 0.75rem;
+        isolation: isolate;
+      }
+
+      .preview-stage::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        content: "";
+        background: #050914;
+        transition: background-color 160ms ease, background-image 160ms ease;
+      }
+
+      .preview-stage[data-background="navy"]::before { background: #050914; }
+      .preview-stage[data-background="black"]::before { background: #000; }
+      .preview-stage[data-background="gray"]::before { background: #4b5563; }
+      .preview-stage[data-background="checker"]::before {
+        background-color: #273449;
+        background-image: repeating-conic-gradient(#152235 0 25%, transparent 0 50%);
+        background-size: 1.5rem 1.5rem;
+      }
+
+      canvas { display: block; max-width: 100%; }
+      .effect-canvas { width: min(100%, 16.5rem); height: auto; image-rendering: auto; }
+
+      .preview-caption {
+        position: absolute;
+        right: 0.55rem;
+        bottom: 0.45rem;
+        margin: 0;
+        color: #d5ebf5;
+        font-size: 0.69rem;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 2px #000;
+      }
+
+      .sheet-source {
+        padding: 0 1rem 1rem;
+      }
+
+      .sheet-source figcaption {
+        margin-bottom: 0.42rem;
+        color: #a9ccdd;
+        font-size: 0.72rem;
+        font-weight: 720;
+        letter-spacing: 0.025em;
+      }
+
+      .sheet-canvas {
+        width: 100%;
+        border: 1px solid rgb(205 240 255 / 0.18);
+        border-radius: 0.6rem;
+        background: #070d16;
+      }
+
+      .metadata {
+        display: grid;
+        grid-template-columns: 4.5rem 1fr;
+        gap: 0.35rem 0.65rem;
+        margin: 0;
+        padding: 0.9rem 1rem 1rem;
+        border-top: 1px solid rgb(174 227 255 / 0.13);
+        color: #d6e8f1;
+        font-size: 0.76rem;
+      }
+
+      .metadata dt { color: #83b4cc; font-weight: 720; }
+      .metadata dd { margin: 0; }
+
+      .error-note {
+        margin: 0.75rem 1rem 1rem;
+        color: #ffb1bb;
+        font-size: 0.78rem;
+      }
+
+      .empty { color: #b9d4e4; }
+
+      @media (max-width: 740px) {
+        .control-panel { grid-template-columns: 1fr 1fr; }
+        .page-header { position: static; }
+      }
+
+      @media (max-width: 440px) {
+        .control-panel { grid-template-columns: 1fr; }
+        .cards { grid-template-columns: 1fr; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .preview-stage::before { transition: none; }
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        .page-header { background: #050914; backdrop-filter: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-content">
+        <nav class="breadcrumb" aria-label="関連プレビュー">
+          <a href="./asset-preview.html">Asset Preview</a>
+          <span aria-hidden="true">/</span>
+          <span>Effect Preview</span>
+        </nav>
+        <h1>エフェクト素材プレビュー</h1>
+        <p class="intro">テクスチャの素の見え方と、ゲーム内に近い属性乗算・加算合成を同じ画面で確認します。</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="control-panel" aria-label="エフェクトプレビュー設定">
+        <label>
+          背景
+          <select id="background-select">
+            <option value="navy">ゲーム内の濃紺 (#050914)</option>
+            <option value="black">黒 (#000000)</option>
+            <option value="gray">中間グレー (#4b5563)</option>
+            <option value="checker">市松模様</option>
+          </select>
+        </label>
+        <label>
+          属性色の乗算
+          <select id="tint-select">
+            <option value="natural">なし（素材の白〜グレー）</option>
+            <option value="fire">炎（#e11d48 → #ff8a3d）</option>
+            <option value="lightning">電気（#d946ef）</option>
+            <option value="void">闇（#c026d3）</option>
+            <option value="chrono">時空（#22d3ee）</option>
+          </select>
+        </label>
+        <label>
+          再生速度
+          <select id="speed-select">
+            <option value="0.5">0.5×（1.25 コマ/秒）</option>
+            <option value="1" selected>1×（ゲーム設定: 2.5 コマ/秒）</option>
+            <option value="2">2×（5 コマ/秒）</option>
+            <option value="4">4×（10 コマ/秒）</option>
+          </select>
+        </label>
+        <label class="toggle-control">
+          ゲーム内の合成
+          <span class="switch-row">
+            <input id="additive-toggle" type="checkbox" checked />
+            <span>加算合成（lighter）</span>
+          </span>
+        </label>
+      </section>
+
+      <p class="status" aria-live="polite">
+        <span><strong id="load-status">0 / 11</strong> <span id="load-message">素材を読み込み中…</span></span>
+        <span>スプライト: <strong id="frame-status">-- / 64</strong></span>
+        <span id="error-status" data-state="ok"></span>
+      </p>
+
+      <p class="legend">
+        <strong>見方:</strong> 「ゲーム内プレビュー」は Canvas 2D の <code>lighter</code> による重ね描きと、白〜グレーのRGBへ属性色を乗算した表示です。
+        「元の8×8シート」はファイルそのものを縮小表示し、黄色の枠が現在再生しているフレームを示します。
+      </p>
+
+      <div class="section-heading">
+        <h2>8×8 スプライトシート（順番にループ再生）</h2>
+        <p>各フレーム 128px / 64フレーム</p>
+      </div>
+      <section id="sprite-cards" class="cards" aria-label="スプライトシート素材"></section>
+
+      <div class="section-heading">
+        <h2>静止テクスチャ</h2>
+        <p>白〜グレー + アルファを属性色で確認</p>
+      </div>
+      <section id="static-cards" class="cards" aria-label="静止エフェクト素材"></section>
+    </main>
+
+    <script>
+      (() => {
+        "use strict";
+
+        // ゲーム側（src/textured-effects.js）と同じ8×8・64コマ。速度も spriteCellChangeSpeed = 2.5 を基準にする。
+        const SHEET_COLUMNS = 8;
+        const SHEET_ROWS = 8;
+        const SHEET_FRAMES = SHEET_COLUMNS * SHEET_ROWS;
+        const GAME_SPRITE_CELL_CHANGE_SPEED = 2.5;
+        const PREVIEW_WIDTH = 320;
+        const PREVIEW_HEIGHT = 256;
+        const SHEET_PREVIEW_SIZE = 512;
+
+        const effects = Object.freeze([
+          {
+            file: "flame-sheet.png",
+            size: "1024 × 1024px",
+            structure: "8×8 スプライトシート（1フレーム 128px / ループ可）",
+            use: "炎のパーティクル、火柱（fireFlame）",
+            sheet: true
+          },
+          {
+            file: "smoke-sheet.png",
+            size: "1024 × 1024px",
+            structure: "8×8 スプライトシート（1フレーム 128px / ループ可）",
+            use: "煙、闇属性の副次パーティクル（fireSmoke / voidSmoke）",
+            sheet: true
+          },
+          {
+            file: "shockwave-sheet.png",
+            size: "1024 × 1024px",
+            structure: "8×8 スプライトシート（1フレーム 128px / ループ可）",
+            use: "衝撃波の輪（全属性の着弾・時空攻撃）",
+            sheet: true
+          },
+          {
+            file: "lightning-arc.png",
+            size: "512 × 512px",
+            structure: "静止画（縦に走る主枝と分岐）",
+            use: "電気属性の弾と放電、時空リフト",
+            sheet: false
+          },
+          {
+            file: "spark.png",
+            size: "64 × 64px",
+            structure: "静止画（ガウシアン減衰の粒）",
+            use: "炎・電気・時空の火花（各属性のburst）",
+            sheet: false
+          },
+          {
+            file: "soft-particle.png",
+            size: "64 × 64px",
+            structure: "静止画（ガウシアン減衰）",
+            use: "汎用の粒子、闇・時空の余韻",
+            sheet: false
+          },
+          {
+            file: "rune-circle-fire.png",
+            size: "512 × 512px",
+            structure: "静止画（三角と放射）",
+            use: "炎の予兆・着弾の地面",
+            sheet: false
+          },
+          {
+            file: "rune-circle-lightning.png",
+            size: "512 × 512px",
+            structure: "静止画（ジグザグ）",
+            use: "電気の予兆・着弾の地面",
+            sheet: false
+          },
+          {
+            file: "rune-circle-void.png",
+            size: "512 × 512px",
+            structure: "静止画（逆五芒星と渦）",
+            use: "闇の予兆・着弾の地面",
+            sheet: false
+          },
+          {
+            file: "rune-circle-chrono.png",
+            size: "512 × 512px",
+            structure: "静止画（時計の目盛り）",
+            use: "自機の時空能力（Q・E・R）",
+            sheet: false
+          },
+          {
+            file: "swirl.png",
+            size: "512 × 512px",
+            structure: "静止画（中心へ吸い込む筋）",
+            use: "闇属性の渦、闇の予兆・着弾",
+            sheet: false
+          }
+        ]);
+
+        const state = {
+          background: "navy",
+          tint: "natural",
+          speed: 1,
+          additive: true,
+          frame: 0,
+          frameEpoch: performance.now()
+        };
+
+        const spriteCards = document.querySelector("#sprite-cards");
+        const staticCards = document.querySelector("#static-cards");
+        const backgroundSelect = document.querySelector("#background-select");
+        const tintSelect = document.querySelector("#tint-select");
+        const speedSelect = document.querySelector("#speed-select");
+        const additiveToggle = document.querySelector("#additive-toggle");
+        const loadStatus = document.querySelector("#load-status");
+        const loadMessage = document.querySelector("#load-message");
+        const frameStatus = document.querySelector("#frame-status");
+        const errorStatus = document.querySelector("#error-status");
+        const renderers = [];
+        const rgbCache = new Map();
+        let loadedCount = 0;
+        let failedCount = 0;
+
+        function makeCanvas(width, height) {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          return canvas;
+        }
+
+        function makeCard(effect) {
+          const card = document.createElement("article");
+          card.className = "effect-card";
+          card.dataset.kind = effect.sheet ? "sheet" : "static";
+          const title = effect.file.replace(".png", "");
+          card.innerHTML = `
+            <header class="card-header">
+              <h3>${title}</h3>
+              <p class="file-name">assets/production/effects/${effect.file}</p>
+            </header>
+            <div class="preview-stage" data-background="navy">
+              <canvas class="effect-canvas" width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" aria-label="${effect.file} のゲーム内プレビュー"></canvas>
+              <p class="preview-caption">ゲーム内プレビュー</p>
+            </div>
+            ${effect.sheet ? `
+              <figure class="sheet-source">
+                <figcaption>元の8×8シート（黄色枠 = 再生中フレーム）</figcaption>
+                <canvas class="sheet-canvas" width="${SHEET_PREVIEW_SIZE}" height="${SHEET_PREVIEW_SIZE}" aria-label="${effect.file} の元スプライトシートとフレームグリッド"></canvas>
+              </figure>
+            ` : ""}
+            <dl class="metadata">
+              <dt>ファイル</dt><dd>${effect.file}</dd>
+              <dt>サイズ</dt><dd>${effect.size}</dd>
+              <dt>構造</dt><dd>${effect.structure}</dd>
+              <dt>ゲーム内</dt><dd>${effect.use}</dd>
+            </dl>
+          `;
+          return card;
+        }
+
+        function createRenderer(effect) {
+          const card = makeCard(effect);
+          (effect.sheet ? spriteCards : staticCards).append(card);
+          const previewCanvas = card.querySelector(".effect-canvas");
+          const renderer = {
+            effect,
+            card,
+            stage: card.querySelector(".preview-stage"),
+            previewCanvas,
+            previewContext: previewCanvas.getContext("2d"),
+            workCanvas: makeCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT),
+            workContext: null,
+            sheetCanvas: card.querySelector(".sheet-canvas"),
+            sheetContext: null,
+            image: new Image(),
+            ready: false,
+            error: ""
+          };
+          renderer.workContext = renderer.workCanvas.getContext("2d", { willReadFrequently: true });
+          if (renderer.sheetCanvas) renderer.sheetContext = renderer.sheetCanvas.getContext("2d");
+          renderer.image.decoding = "async";
+          renderer.image.addEventListener("load", () => {
+            renderer.ready = true;
+            loadedCount += 1;
+            updateLoadStatus();
+            renderRenderer(renderer, state.frame);
+          });
+          renderer.image.addEventListener("error", () => {
+            renderer.error = `${effect.file} を読み込めませんでした`;
+            failedCount += 1;
+            updateLoadStatus();
+            const note = document.createElement("p");
+            note.className = "error-note";
+            note.textContent = renderer.error;
+            card.append(note);
+          });
+          renderer.image.src = `../assets/production/effects/${effect.file}`;
+          return renderer;
+        }
+
+        function updateLoadStatus() {
+          loadStatus.textContent = `${loadedCount} / ${effects.length}`;
+          loadMessage.textContent = loadedCount === effects.length ? "素材を表示中" : "素材を読み込み中…";
+          if (failedCount > 0) {
+            errorStatus.textContent = `${failedCount} 件の素材を読み込めませんでした`;
+            errorStatus.dataset.state = "error";
+          } else if (loadedCount === effects.length) {
+            errorStatus.textContent = "全素材を表示中";
+            errorStatus.dataset.state = "ok";
+          }
+        }
+
+        function parseHex(hex) {
+          if (!rgbCache.has(hex)) {
+            const compact = hex.slice(1);
+            rgbCache.set(hex, [
+              Number.parseInt(compact.slice(0, 2), 16),
+              Number.parseInt(compact.slice(2, 4), 16),
+              Number.parseInt(compact.slice(4, 6), 16)
+            ]);
+          }
+          return rgbCache.get(hex);
+        }
+
+        function lerp(a, b, amount) { return Math.round(a + (b - a) * amount); }
+
+        // 白〜グレーのRGBへ属性色を乗算する。alpha は保持するため、輪郭の柔らかさは素材のまま確認できる。
+        function multiplyAttributeColor(context) {
+          if (state.tint === "natural") return;
+          const imageData = context.getImageData(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          const pixels = imageData.data;
+          const solid = state.tint === "lightning" ? parseHex("#d946ef")
+            : state.tint === "void" ? parseHex("#c026d3")
+              : state.tint === "chrono" ? parseHex("#22d3ee")
+                : null;
+          const fireStart = parseHex("#e11d48");
+          const fireEnd = parseHex("#ff8a3d");
+          for (let index = 0; index < pixels.length; index += 4) {
+            if (pixels[index + 3] === 0) continue;
+            let color = solid;
+            if (state.tint === "fire") {
+              const row = Math.floor(index / 4 / PREVIEW_WIDTH);
+              const amount = 1 - row / Math.max(1, PREVIEW_HEIGHT - 1);
+              color = [
+                lerp(fireStart[0], fireEnd[0], amount),
+                lerp(fireStart[1], fireEnd[1], amount),
+                lerp(fireStart[2], fireEnd[2], amount)
+              ];
+            }
+            pixels[index] = Math.round((pixels[index] * color[0]) / 255);
+            pixels[index + 1] = Math.round((pixels[index + 1] * color[1]) / 255);
+            pixels[index + 2] = Math.round((pixels[index + 2] * color[2]) / 255);
+          }
+          context.putImageData(imageData, 0, 0);
+        }
+
+        function drawTextureToWorkCanvas(renderer, frame) {
+          const context = renderer.workContext;
+          const { image, effect } = renderer;
+          context.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          const sourceWidth = effect.sheet ? image.naturalWidth / SHEET_COLUMNS : image.naturalWidth;
+          const sourceHeight = effect.sheet ? image.naturalHeight / SHEET_ROWS : image.naturalHeight;
+          const maxWidth = PREVIEW_WIDTH * 0.78;
+          const maxHeight = PREVIEW_HEIGHT * 0.84;
+          const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight);
+          const width = sourceWidth * scale;
+          const height = sourceHeight * scale;
+          const x = (PREVIEW_WIDTH - width) / 2;
+          const y = (PREVIEW_HEIGHT - height) / 2;
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = "high";
+          if (effect.sheet) {
+            const column = frame % SHEET_COLUMNS;
+            const row = Math.floor(frame / SHEET_COLUMNS);
+            context.drawImage(image, column * sourceWidth, row * sourceHeight, sourceWidth, sourceHeight, x, y, width, height);
+          } else {
+            context.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight, x, y, width, height);
+          }
+          multiplyAttributeColor(context);
+        }
+
+        function drawGamePreview(renderer, frame) {
+          const context = renderer.previewContext;
+          drawTextureToWorkCanvas(renderer, frame);
+          context.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          if (state.additive) {
+            // 透明Canvas内でも同じ素材を重ね、ゲームの加算発光に近い明るい芯を再現する。
+            context.globalCompositeOperation = "lighter";
+            context.globalAlpha = 0.7;
+            context.drawImage(renderer.workCanvas, 0, 0);
+            context.globalAlpha = 0.45;
+            context.drawImage(renderer.workCanvas, 0, 0);
+            context.globalAlpha = 0.25;
+            context.drawImage(renderer.workCanvas, 0, 0);
+          } else {
+            context.globalCompositeOperation = "source-over";
+            context.globalAlpha = 1;
+            context.drawImage(renderer.workCanvas, 0, 0);
+          }
+          context.globalAlpha = 1;
+          context.globalCompositeOperation = "source-over";
+        }
+
+        function drawSpriteSheet(renderer, frame) {
+          if (!renderer.sheetContext) return;
+          const context = renderer.sheetContext;
+          const canvas = renderer.sheetCanvas;
+          const stepX = canvas.width / SHEET_COLUMNS;
+          const stepY = canvas.height / SHEET_ROWS;
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(renderer.image, 0, 0, canvas.width, canvas.height);
+          context.save();
+          context.strokeStyle = "rgb(218 242 255 / 0.62)";
+          context.lineWidth = 1;
+          for (let index = 0; index <= SHEET_COLUMNS; index += 1) {
+            const x = Math.round(index * stepX) + 0.5;
+            const y = Math.round(index * stepY) + 0.5;
+            context.beginPath();
+            context.moveTo(x, 0);
+            context.lineTo(x, canvas.height);
+            context.stroke();
+            context.beginPath();
+            context.moveTo(0, y);
+            context.lineTo(canvas.width, y);
+            context.stroke();
+          }
+          const column = frame % SHEET_COLUMNS;
+          const row = Math.floor(frame / SHEET_COLUMNS);
+          context.strokeStyle = "#fde047";
+          context.lineWidth = 3;
+          context.strokeRect(column * stepX + 1.5, row * stepY + 1.5, stepX - 3, stepY - 3);
+          context.restore();
+        }
+
+        function renderRenderer(renderer, frame) {
+          if (!renderer.ready) return;
+          drawGamePreview(renderer, renderer.effect.sheet ? frame : 0);
+          if (renderer.effect.sheet) drawSpriteSheet(renderer, frame);
+        }
+
+        function renderAll() {
+          for (const renderer of renderers) {
+            renderer.stage.dataset.background = state.background;
+            renderRenderer(renderer, state.frame);
+          }
+        }
+
+        function onSettingsChanged() {
+          state.background = backgroundSelect.value;
+          state.tint = tintSelect.value;
+          state.speed = Number(speedSelect.value);
+          state.additive = additiveToggle.checked;
+          renderAll();
+        }
+
+        backgroundSelect.addEventListener("change", onSettingsChanged);
+        tintSelect.addEventListener("change", onSettingsChanged);
+        speedSelect.addEventListener("change", () => {
+          const now = performance.now();
+          state.frameEpoch = now - (state.frame / (GAME_SPRITE_CELL_CHANGE_SPEED * Number(speedSelect.value))) * 1000;
+          onSettingsChanged();
+        });
+        additiveToggle.addEventListener("change", onSettingsChanged);
+
+        for (const effect of effects) renderers.push(createRenderer(effect));
+        updateLoadStatus();
+
+        function animate(now) {
+          const framesPerSecond = GAME_SPRITE_CELL_CHANGE_SPEED * state.speed;
+          const frame = Math.floor(((now - state.frameEpoch) / 1000) * framesPerSecond) % SHEET_FRAMES;
+          if (frame !== state.frame) {
+            state.frame = frame;
+            frameStatus.textContent = `${String(frame + 1).padStart(2, "0")} / ${SHEET_FRAMES}`;
+            for (const renderer of renderers) {
+              if (renderer.effect.sheet) renderRenderer(renderer, frame);
+            }
+          }
+          requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+      })();
+    </script>
+  </body>
+</html>
