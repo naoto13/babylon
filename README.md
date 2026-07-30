@@ -36,6 +36,15 @@ python3 tools/serve.py 4173  # no-cache ヘッダー付き（JS/アセット差�
 - 起動: 上記の `python3 tools/serve.py 4173` 後、`http://127.0.0.1:4173/moonlit-potion-workshop/game/` を開く（配置編集は末尾に `?layout=1`）
 - ロジックの単体テスト: `node --test moonlit-potion-workshop/game/test/`
 
+## アセット生成パイプライン
+
+3Dアセットの作り方は `.claude/skills/image-to-3d-asset/` にスキルとして同梱しています（参照画像の作り方、Mac ローカルでの image-to-3D 環境構築、glb の検証・減量、Babylon.js への組み込み）。
+
+```bash
+# glb の健全性チェック（UV・テクスチャ・法線の欠落、板状の崩れ、塊化を検出）
+node .claude/skills/image-to-3d-asset/scripts/check-glb.mjs moonlit-potion-workshop/game/assets/models/cauldron.glb
+```
+
 クロノ・アリーナのプレイ版はBabylon.jsをバンドルするため、次のコマンドで起動します。
 
 ```bash
