@@ -399,13 +399,50 @@ const s = window.__preview.scene;
 s.materials.forEach(m =&gt; m.albedoColor?.scaleInPlace(5));
 s.render(); s.render();</code></pre>
 
-        <div class="note">
-          <strong>タブが非アクティブだとスクリーンショットが真っ黒になる。</strong>
+        <div class="warn">
+          <strong>動きを伴う確認は orca 埋め込みブラウザで行う。</strong>
+          claude-in-chrome のタブは <code>visibilityState: "hidden"</code> になり、
           Chrome が <code>requestAnimationFrame</code> を止めるため
-          <code>engine.runRenderLoop</code> が回らない。コンソールエラーは出ず、
-          <code>engine.getFps()</code> は最後の値を返すので誤診しやすい。
-          <code>scene.getActiveMeshes().length</code> が 0 なら描画が止まっている。
-          スクショ直前に <code>scene.render()</code> を手動で 2 回呼べば正しく撮れる。
+          <code>engine.runRenderLoop</code> が回らない。<strong>ゲームループが一切進まず、
+          しかもエラーは出ない</strong>（<code>engine.getFps()</code> は最後の値を返すので誤診しやすい）。
+          実測では30秒待っても残り時間・撃破数・HP が初期値のままだった。
+          <code>rAF</code> を <code>setTimeout</code> へ差し替えても、
+          エンジンが生成時にバインド済みなので効かない。
+        </div>
+
+        <p>
+          同じページを orca で開くと <code>visibilityState: "visible"</code> になり、
+          そのまま回る（実測 1502ms で 66 フレーム）。判定は次の 1 行で足りる。
+        </p>
+        <pre><code>JSON.stringify({ visible: document.visibilityState, hasFocus: document.hasFocus() })</code></pre>
+
+        <h3>orca での確認手順</h3>
+        <pre><code>orca tab create --url "http://127.0.0.1:5173/?visual-test&amp;auto-start" --json
+orca eval --expression "window.__game.camera.fov = 0.95" --json
+orca screenshot --format png --json | python3 -c "
+import sys, json, base64, pathlib
+r = json.load(sys.stdin).get('result', {})
+b64 = r.get('data') or r.get('screenshot') or r.get('image') or ''
+pathlib.Path('shot.png').write_bytes(base64.b64decode(b64))
+"</code></pre>
+
+        <div class="note">
+          <strong>本編には開発時限定のデバッグ窓口を用意してある。</strong>
+          <code>?visual-test</code> を付けると <code>window.__game</code> に
+          scene / engine / camera / player / enemies が露出し、
+          <code>orca eval</code> からカメラを引く・敵のクールダウンを 0 にして
+          任意のタイミングで攻撃を発火させる、といった操作ができる。
+          <code>?auto-start</code> / <code>?enemy-preview=&lt;type&gt;</code> /
+          <code>?swarm=N</code> / <code>?crowded</code> /
+          <code>?lightning-preview=shooter|boss</code> も使える。
+        </div>
+
+        <div class="note">
+          <strong>orca ブラウザの制約。</strong>
+          ビューポートは固定（実測 456×786）で <code>window.resizeTo()</code> は効かない。
+          全体を写したいときはページ側のカメラを操作する。
+          また 0.2 秒程度の短い演出は <code>orca screenshot</code> の間隔ではすり抜けるので、
+          開発用フラグで演出を引き延ばすか、状態を直接操作して発火タイミングを掴む。
         </div>
       </section>
 

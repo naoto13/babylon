@@ -19,6 +19,7 @@ const EFFECT_SCALE_BY_ELEMENT = Object.freeze({
 const MAX_DETAILED_EFFECTS = 8;
 const MAX_ACTIVE_EFFECT_EVENTS = 12;
 const MAX_GROUND_TRACES = 8;
+const MAX_PROJECTILE_FLAME_TRAILS = 6;
 
 function color4(hex, alpha = 1) {
   const color = Color3.FromHexString(hex);
@@ -57,6 +58,9 @@ export class TexturedEffectController {
     this.materials = this.createMaterials();
     this.systems = new Map();
     this.systemIdleAt = new Map();
+    // boss の左右砲弾を含め、追従炎も起動時に固定6基を確保する。
+    this.projectileFlameLimit = 4;
+    this.projectileFlames = this.createProjectileFlamePool(MAX_PROJECTILE_FLAME_TRAILS);
     this.pools = {
       shockwave: this.createPlanePool("shockwave", 12, { horizontal: true, size: 2.5 }),
       rune: this.createPlanePool("rune", 14, { horizontal: true, size: 2.7 }),
@@ -244,6 +248,44 @@ export class TexturedEffectController {
     this.systemIdleAt.set(name, 0);
   }
 
+  createProjectileFlamePool(capacity) {
+    return Array.from({ length: capacity }, (_, index) => {
+      const system = new ParticleSystem(`textured-projectile-flame-${index}`, 26, this.scene, undefined, true);
+      // 既存の fireFlame と同じ flame-sheet / 8x8 sprite-sheet を共有し、弾の後方だけへ少量ずつ出す。
+      system.particleTexture = this.textures.flameSheet;
+      system.emitter = new Vector3(0, -100, 0);
+      system.emitRate = 0;
+      system.manualEmitCount = 0;
+      system.isLocal = false;
+      system.blendMode = ParticleSystem.BLENDMODE_ADD;
+      system.billboardMode = ParticleSystem.BILLBOARDMODE_ALL;
+      system.minSize = 0.28;
+      system.maxSize = 0.54;
+      system.minLifeTime = 0.24;
+      system.maxLifeTime = 0.4;
+      system.minEmitPower = 0.55;
+      system.maxEmitPower = 1.05;
+      system.minEmitBox = new Vector3(-0.08, -0.04, -0.08);
+      system.maxEmitBox = new Vector3(0.08, 0.04, 0.08);
+      system.direction1 = new Vector3(-0.35, 0.45, -0.35);
+      system.direction2 = new Vector3(0.35, 0.85, 0.35);
+      system.gravity = new Vector3(0, 0.12, 0);
+      system.color1 = color4("#ffdf8a", 0.96);
+      system.color2 = color4("#ff4b31", 0.8);
+      system.colorDead = color4("#74121a", 0);
+      system.minInitialRotation = 0;
+      system.maxInitialRotation = Math.PI * 2;
+      system.spriteCellWidth = 128;
+      system.spriteCellHeight = 128;
+      system.startSpriteCellID = 0;
+      system.endSpriteCellID = SHEET_FRAMES - 1;
+      system.spriteCellChangeSpeed = 2.5;
+      system.spriteCellLoop = true;
+      system.spriteRandomStartCell = true;
+      return { system, projectile: null, active: false, emitClock: 0 };
+    });
+  }
+
   createParticleSystems() {
     // capacity は高品質時の上限。low は発火する system 数と manualEmitCount を下げる。
     this.createParticleSystem("fireFlame", 80, "flameSheet", {
@@ -305,6 +347,10 @@ export class TexturedEffectController {
   applyQuality(quality) {
     this.quality = quality;
     this.burstMultiplier = this.prefersReducedMotion ? 0.36 : this.visualTestMode ? 1 : quality === "low" ? 0.44 : quality === "high" ? 1 : 0.72;
+    this.projectileFlameLimit = this.prefersReducedMotion ? 1 : quality === "low" ? 2 : quality === "high" ? 6 : 4;
+    for (const [index, slot] of this.projectileFlames.entries()) {
+      if (index >= this.projectileFlameLimit && slot.active) this.releaseProjectileFlame(slot.projectile);
+    }
     this.suppressedSystems = quality === "low"
       ? new Set(["fireSmoke", "voidSoft", "chronoMist", "chronoSpark"])
       : new Set();
@@ -547,12 +593,56 @@ export class TexturedEffectController {
     slot.accent.setEnabled(element === "fire");
   }
 
+  attachProjectileFlame(projectile) {
+    if (this.projectileFlames.some((slot) => slot.active && slot.projectile === projectile)) return;
+    const slot = this.projectileFlames.slice(0, this.projectileFlameLimit).find((candidate) => !candidate.active);
+    if (!slot) return;
+    slot.projectile = projectile;
+    slot.active = true;
+    slot.emitClock = 0;
+  }
+
+  releaseProjectileFlame(projectile) {
+    const slot = this.projectileFlames.find((candidate) => candidate.projectile === projectile);
+    if (!slot) return;
+    slot.active = false;
+    slot.projectile = null;
+    slot.emitClock = 0;
+    // 既に出た炎は寿命まで自然に消え、新規放出だけを止める。
+    slot.system.stop();
+  }
+
+  updateProjectileFlames(deltaSeconds) {
+    for (const slot of this.projectileFlames) {
+      if (!slot.active) continue;
+      if (!slot.projectile?.alive) {
+        this.releaseProjectileFlame(slot.projectile);
+        continue;
+      }
+      slot.emitClock -= deltaSeconds;
+      if (slot.emitClock > 0) continue;
+      const { position, velocity } = slot.projectile;
+      const inverseLength = 1 / Math.max(0.001, Math.hypot(velocity.x, velocity.z));
+      const backwardX = -velocity.x * inverseLength;
+      const backwardZ = -velocity.z * inverseLength;
+      const sideX = -backwardZ;
+      const sideZ = backwardX;
+      slot.system.emitter.set(position.x + backwardX * 0.46, position.y - 0.06, position.z + backwardZ * 0.46);
+      slot.system.direction1.set(backwardX * 1.55 + sideX * 0.28, 0.5, backwardZ * 1.55 + sideZ * 0.28);
+      slot.system.direction2.set(backwardX * 2.2 - sideX * 0.28, 1.02, backwardZ * 2.2 - sideZ * 0.28);
+      slot.system.manualEmitCount = this.quality === "low" || this.prefersReducedMotion ? 1 : 2;
+      slot.system.start();
+      slot.emitClock = this.quality === "low" || this.prefersReducedMotion ? 0.12 : 0.075;
+    }
+  }
+
   update(deltaSeconds) {
     this.elapsed += deltaSeconds;
     this.activeEffectEvents = this.activeEffectEvents.filter((until) => until > this.elapsed);
     for (const [name, system] of this.systems) {
       if (this.elapsed >= (this.systemIdleAt.get(name) ?? 0) && system.getActiveCount() === 0 && system.isStarted()) system.stop();
     }
+    this.updateProjectileFlames(deltaSeconds);
     this.updateShockwaves(deltaSeconds);
     this.updateRunes(deltaSeconds);
     this.updateLightning(deltaSeconds);
@@ -662,6 +752,12 @@ export class TexturedEffectController {
       system.stop();
       this.systemIdleAt.set(name, 0);
     }
+    for (const slot of this.projectileFlames) {
+      slot.active = false;
+      slot.projectile = null;
+      slot.emitClock = 0;
+      slot.system.stop();
+    }
     this.activeEffectEvents = [];
     this.effectPressure = "full";
   }
@@ -675,6 +771,8 @@ export class TexturedEffectController {
       activeEffectEvents: this.activeEffectEvents.length,
       maxDetailedEffects: MAX_DETAILED_EFFECTS,
       maxActiveEffectEvents: MAX_ACTIVE_EFFECT_EVENTS,
+      activeProjectileFlames: this.projectileFlames.filter((slot) => slot.active).length,
+      maxProjectileFlames: this.projectileFlameLimit,
       activeGroundTraces: this.pools.trace.filter((slot) => slot.active).length,
       maxGroundTraces: MAX_GROUND_TRACES
     };
