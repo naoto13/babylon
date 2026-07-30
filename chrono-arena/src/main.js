@@ -1,4 +1,11 @@
 import "@babylonjs/loaders/glTF/2.0/glTFLoader.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_mesh_quantization.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_meshopt_compression.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_texture_webp.js";
+// gltfpack は UV を量子化する代わりに KHR_texture_transform でスケールを補正する。
+// この拡張は extensionsRequired には入らないため、未登録だとローダーがエラーを出さず
+// 黙って無視し、テクスチャのサンプリング位置だけがずれて別モデルのように見える。
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_texture_transform.js";
 
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
@@ -99,7 +106,7 @@ const modelContainers = new Map();
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
   environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
-  heroModel: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
+  heroModel: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,
   chaserModel: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
   shooterModel: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
   thiefModel: new URL("../assets/production/models/enemy-thief-concept.glb", import.meta.url).href,

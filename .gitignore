@@ -9,4 +9,9 @@ tools/trellis2/venv/
 tools/trellis2/ComfyUI/
 tools/trellis2/secrets/
 tools/trellis2/comparison/
+# ローカルに展開したポータブル版ツールチェーン。バージョン番号がディレクトリ名に
+# 入るので、更新しても追従できるようパターンで無視する。
+tools/trellis2/blender-*/
+tools/trellis2/node-*/
+tools/trellis2/*.log
 .pnpm-store/
