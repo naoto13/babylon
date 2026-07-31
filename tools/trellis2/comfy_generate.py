@@ -72,7 +72,8 @@ def upload_image(path: str) -> str:
 
 def build_prompt(*, image_name, out_name, texture_size, target_faces,
                  shape_resolution, to_resolution, seed, keep_loaded,
-                 texture_resolution, max_views, quad_resolution, cascade=True):
+                 texture_resolution, max_views, quad_resolution, cascade=True,
+                 remove_background=False):
     """MeshWithTexturing.json と同じノード構成を API 形式で返す。"""
     p = {}
     p["39"] = {"class_type": "Trellis2LoadModel", "inputs": {
@@ -82,8 +83,10 @@ def build_prompt(*, image_name, out_name, texture_size, target_faces,
         "use_reconviagen": False}}
     p["6"] = {"class_type": "Trellis2LoadImageWithTransparency",
               "inputs": {"image": image_name}}
+    # 参照画像にアルファが無い場合だけ remove_background を立てる。既存の refs は
+    # 透過済みなので、そこで rembg を通すと輪郭がかえって荒れる。
     p["194"] = {"class_type": "Trellis2PreProcessImage", "inputs": {
-        "image": ["6", 2], "padding": 10, "remove_background": False,
+        "image": ["6", 2], "padding": 10, "remove_background": remove_background,
         "max_size": 1024}}
     p["213"] = {"class_type": "Trellis2ImageCondGenerator", "inputs": {
         "pipeline": ["39", 0], "image": ["194", 0], "max_views": 1}}
@@ -226,6 +229,8 @@ def main():
     ap.add_argument("--to-resolution", type=int, default=1024, choices=[1024, 1536])
     ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--suffix", default="", help="出力名に付ける識別子（パラメータ比較用）")
+    ap.add_argument("--remove-background", action="store_true",
+                    help="参照画像にアルファが無いとき、前処理で背景を除去する")
     ap.add_argument("--no-cascade", action="store_true",
                     help="1024 へのカスケード段を外して 512 のままデコードする（VRAM 退避用・ディテールは落ちる）")
     args = ap.parse_args()
@@ -247,7 +252,8 @@ def main():
             keep_loaded=(i < len(args.name) - 1),
             texture_resolution=args.texture_resolution,
             max_views=args.max_views, quad_resolution=args.quad_resolution,
-            cascade=not args.no_cascade)
+            cascade=not args.no_cascade,
+            remove_background=args.remove_background)
         print(f"[{i + 1}/{len(args.name)}] {out_name} <- {os.path.basename(image)}", flush=True)
         entry, secs = run(prompt, client_id, out_name)
         files = collect_outputs(entry, args.out_dir, out_name)

@@ -116,6 +116,30 @@ const HERO_VISUAL_SCALE = Object.freeze({
 const HERO_VISUAL_Y_OFFSET = Object.freeze({
   cauldron: -0.04,
 });
+// 家具（作業台・棚）は上に物が載るため、中心ではなく「天面」を基準に合わせる。
+// 小物と違って寸法は既存の手続き生成メッシュが正で、そこへ GLB を合わせにいく。
+// 幅で等倍スケールし、実測した天面の高さを topY へ載せる（奥行きは GLB の比率のまま。
+// 棚は生成物のほうが深いが、瓶が載る棚としてはむしろ自然なので詰めない）。
+const FURNITURE_ASSETS = Object.freeze({
+  workbench: Object.freeze({
+    path: "assets/models/workbench.glb",
+    hide: ["table"],
+    hidePrefix: ["table-leg-"],
+    width: 9.6,
+    centre: Object.freeze({ x: 0, z: 1.1 }),
+    topY: 0.575,
+    family: "wood",
+  }),
+  jarShelf: Object.freeze({
+    path: "assets/models/jar-shelf.glb",
+    hide: ["jar-shelf"],
+    hidePrefix: [],
+    width: 8.8,
+    centre: Object.freeze({ x: 0, z: 4.12 }),
+    topY: 2.24,
+    family: "wood",
+  }),
+});
 // Static set dressing stays outside the interaction graph: its GLBs have no
 // action registration or fallback mesh to preserve. Positions are model centres.
 const DRESSING_ASSETS = Object.freeze({
@@ -123,7 +147,7 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-books.glb",
     position: Object.freeze({ x: 1.293, y: 0.81, z: 2.363 }),
     rotationY: -0.18,
-    size: Object.freeze({ height: 1.115, diameter: 2.088 }),
+    size: Object.freeze({ height: 0.835, diameter: 1.563 }),
     family: "leather",
   }),
   plant: Object.freeze({
@@ -147,7 +171,7 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-hourglass.glb",
     position: Object.freeze({ x: 2.988, y: 0.88, z: 2.626 }),
     rotationY: 0.36,
-    size: Object.freeze({ height: 2.096, diameter: 2.131 }),
+    size: Object.freeze({ height: 2.639, diameter: 2.683 }),
     family: "wood",
   }),
   crate: Object.freeze({
@@ -170,21 +194,21 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-bottles.glb",
     position: Object.freeze({ x: -1.4, y: 0.82, z: 3.38 }),
     rotationY: 0.12,
-    size: Object.freeze({ height: 0.735, diameter: 1.47 }),
+    size: Object.freeze({ height: 0.546, diameter: 1.093 }),
     family: "glass",
   }),
   scroll: Object.freeze({
     path: "assets/models/dress-scroll.glb",
     position: Object.freeze({ x: 4.1, y: 0.75, z: 1.52 }),
     rotationY: -0.28,
-    size: Object.freeze({ height: 0.525, diameter: 1.47 }),
+    size: Object.freeze({ height: 0.2, diameter: 0.56 }),
     family: "parchment",
   }),
   lantern: Object.freeze({
     path: "assets/models/dress-lantern.glb",
     position: Object.freeze({ x: 4.12, y: 2.49, z: 4.12 }),
     rotationY: Math.PI,
-    size: Object.freeze({ height: 0.5, diameter: 0.35 }),
+    size: Object.freeze({ height: 0.574, diameter: 0.402 }),
     family: "brass",
   }),
   ivy: Object.freeze({
@@ -198,7 +222,7 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-moon-orb.glb",
     position: Object.freeze({ x: -1.288, y: 0.785, z: 0.857 }),
     rotationY: 0,
-    size: Object.freeze({ height: 0.985, diameter: 1.126 }),
+    size: Object.freeze({ height: 1.114, diameter: 1.273 }),
     family: "moonOrb",
     flags: Object.freeze({ includeGlow: true }),
   }),
@@ -208,14 +232,14 @@ const DRESSING_ASSETS = Object.freeze({
     rotationX: 1.05,
     rotationY: 0.32,
     rotationZ: -0.85,
-    size: Object.freeze({ height: 2.488, diameter: 11.684 }),
+    size: Object.freeze({ height: 0.929, diameter: 4.364 }),
     family: "plain",
   }),
   petalBowl: Object.freeze({
     path: "assets/models/dress-petal-bowl.glb",
     position: Object.freeze({ x: -2.116, y: 0.73, z: -1.815 }),
     rotationY: 0.1,
-    size: Object.freeze({ height: 0.791, diameter: 1.888 }),
+    size: Object.freeze({ height: 0.615, diameter: 1.467 }),
     family: "plain",
   }),
   crystalBowl: Object.freeze({
@@ -229,7 +253,7 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-spellbook.glb",
     position: Object.freeze({ x: -3.607, y: 0.76, z: -1.412 }),
     rotationY: 0.15,
-    size: Object.freeze({ height: 2.138, diameter: 10.751 }),
+    size: Object.freeze({ height: 1.245, diameter: 6.262 }),
     family: "plain",
   }),
   scale: Object.freeze({
@@ -237,7 +261,7 @@ const DRESSING_ASSETS = Object.freeze({
     position: Object.freeze({ x: 2.075, y: 0.965, z: 1.086 }),
     rotationX: 0.65,
     rotationY: 0.55,
-    size: Object.freeze({ height: 2.478, diameter: 2.702 }),
+    size: Object.freeze({ height: 2.964, diameter: 3.232 }),
     family: "plain",
   }),
   herbBundle: Object.freeze({
@@ -258,7 +282,7 @@ const DRESSING_ASSETS = Object.freeze({
     path: "assets/models/dress-inkwell.glb",
     position: Object.freeze({ x: -1.582, y: 0.7, z: -0.865 }),
     rotationY: -0.3,
-    size: Object.freeze({ height: 0.536, diameter: 0.751 }),
+    size: Object.freeze({ height: 0.699, diameter: 0.98 }),
     family: "plain",
   }),
   candelabra: Object.freeze({
@@ -280,7 +304,7 @@ const DRESSING_ASSETS = Object.freeze({
     position: Object.freeze({ x: 1.906, y: 0.605, z: -1.252 }),
     rotationY: 0.35,
     fit: "flat",
-    size: Object.freeze({ height: 0.291, diameter: 5.319 }),
+    size: Object.freeze({ height: 0.291, diameter: 4.731 }),
     family: "parchment",
   }),
   flask: Object.freeze({
@@ -303,14 +327,14 @@ const DRESSING_ASSETS = Object.freeze({
     position: Object.freeze({ x: 3.5, y: 0.6, z: -0.05 }),
     rotationY: 0.6,
     fit: "flat",
-    size: Object.freeze({ height: 0.12, diameter: 0.96 }),
+    size: Object.freeze({ height: 0.12, diameter: 0.839 }),
     family: "brass",
   }),
   teapot: Object.freeze({
     path: "assets/models/dress-teapot.glb",
     position: Object.freeze({ x: 3.692, y: 0.8, z: 0.734 }),
     rotationY: -0.3,
-    size: Object.freeze({ height: 1.164, diameter: 1.680 }),
+    size: Object.freeze({ height: 0.914, diameter: 1.319 }),
     family: "ceramic",
   }),
   herbPlate: Object.freeze({
@@ -327,6 +351,7 @@ const HERO_LAYOUT_SCALE_LIMITS = Object.freeze({ min: 0.3, max: 4 });
 const HERO_LAYOUT_HEIGHT_LIMITS = Object.freeze({ min: 0.3, max: 3.5 });
 const heroAssetLoadScenes = new WeakSet();
 const dressingAssetLoadScenes = new WeakSet();
+const furnitureAssetLoadScenes = new WeakSet();
 const hammeredIronTexturesByScene = new WeakMap();
 const hammeredIronMaterialsByScene = new WeakMap();
 const heroStandardMaterialsByScene = new WeakMap();
@@ -1498,6 +1523,125 @@ function loadDressingAssets(context) {
   for (const [name, config] of Object.entries(DRESSING_ASSETS)) void loadDressingProp(name, config, context);
 }
 
+// 真上から落としたレイが最初に当たる高さを格子状に測り、いちばん多く当たった高さを
+// 「物が載る天面」として返す。上向き面の面積で判定すると、AI 生成メッシュが内側に持つ
+// 水平なシェル面（作業台では実面より 0.4 低い位置にあった）を拾ってしまう。
+function measureTopSurfaceY(meshes, bounds, scene) {
+  const renderable = meshes.filter((mesh) => mesh.getTotalVertices?.() > 0);
+  if (!renderable.length) return bounds.minimumY + bounds.height;
+  const pickable = new Map(renderable.map((mesh) => [mesh, mesh.isPickable]));
+  for (const mesh of renderable) mesh.isPickable = true;
+  const hits = [];
+  const start = bounds.minimumY + bounds.height * 1.5;
+  const distance = bounds.height * 2;
+  const half = { x: bounds.halfX * 0.8, z: bounds.halfZ * 0.8 };
+  const STEPS = 8;
+  try {
+    for (let ix = 0; ix <= STEPS; ix += 1) {
+      for (let iz = 0; iz <= STEPS; iz += 1) {
+        const x = bounds.centre.x + (ix / STEPS * 2 - 1) * half.x;
+        const z = bounds.centre.z + (iz / STEPS * 2 - 1) * half.z;
+        const ray = new BABYLON.Ray(new BABYLON.Vector3(x, start, z), new BABYLON.Vector3(0, -1, 0), distance);
+        const hit = scene.pickWithRay(ray, (mesh) => pickable.has(mesh));
+        if (hit?.hit) hits.push(hit.pickedPoint.y);
+      }
+    }
+  } finally {
+    for (const [mesh, was] of pickable) mesh.isPickable = was;
+  }
+  if (!hits.length) return bounds.minimumY + bounds.height;
+  // いちばん当たりの多い高さ帯の平均。棚の奥の桟のような少数派の高い面に引きずられない。
+  const BINS = 64;
+  const span = Math.max(bounds.height, 0.000001);
+  const buckets = new Map();
+  for (const y of hits) {
+    const bin = Math.min(BINS - 1, Math.max(0, Math.floor(((y - bounds.minimumY) / span) * BINS)));
+    const bucket = buckets.get(bin) ?? { count: 0, sum: 0 };
+    bucket.count += 1;
+    bucket.sum += y;
+    buckets.set(bin, bucket);
+  }
+  let best = null;
+  for (const bucket of buckets.values()) {
+    if (!best || bucket.count > best.count) best = bucket;
+  }
+  return best.sum / best.count;
+}
+
+function furnitureBounds(meshes) {
+  const renderable = meshes.filter((mesh) => mesh.getTotalVertices?.() > 0);
+  if (!renderable.length) throw new Error("GLB に描画可能な mesh がありません");
+  const minimum = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+  const maximum = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+  for (const mesh of renderable) {
+    mesh.computeWorldMatrix(true);
+    const box = mesh.getBoundingInfo().boundingBox;
+    minimum.minimizeInPlace(box.minimumWorld);
+    maximum.maximizeInPlace(box.maximumWorld);
+  }
+  const size = maximum.subtract(minimum);
+  if (!(size.x > 0.000001) || !(size.y > 0.000001)) throw new Error("GLB の寸法を正規化できません");
+  return {
+    centre: minimum.add(maximum).scale(0.5),
+    width: size.x,
+    height: size.y,
+    minimumY: minimum.y,
+    halfX: size.x / 2,
+    halfZ: size.z / 2,
+  };
+}
+
+async function loadFurnitureProp(name, config, context) {
+  const { scene } = context;
+  if (window.__babylonLoaderLoadFailed || !BABYLON.SceneLoader?.ImportMeshAsync) {
+    console.info(`[furniture] ${name} は手続き生成のままにします: glTF loader CDN を読み込めませんでした`);
+    return;
+  }
+  let sceneDisposed = false;
+  scene.onDisposeObservable.addOnce(() => { sceneDisposed = true; });
+  let meshes = [];
+  let root = null;
+  try {
+    const { rootUrl, filename } = assetUrlParts(config.path);
+    const result = await BABYLON.SceneLoader.ImportMeshAsync("", rootUrl, filename, scene);
+    meshes = result.meshes;
+    if (sceneDisposed) return;
+
+    const bounds = furnitureBounds(meshes);
+    const scale = config.width / bounds.width;
+    const topY = measureTopSurfaceY(meshes, bounds, scene);
+    root = new BABYLON.TransformNode(`${name}-furniture`, scene);
+    root.scaling.setAll(scale);
+    root.position.set(
+      config.centre.x - bounds.centre.x * scale,
+      config.topY - topY * scale,
+      config.centre.z - bounds.centre.z * scale,
+    );
+    for (const imported of importedRoots(meshes)) imported.parent = root;
+    for (const mesh of meshes) mesh.isPickable = false;
+    applyHeroMaterial(meshes, config.family, scene);
+
+    for (const meshName of config.hide ?? []) scene.getMeshByName(meshName)?.setEnabled(false);
+    for (const prefix of config.hidePrefix ?? []) {
+      for (const mesh of scene.meshes) {
+        if (mesh.name.startsWith(prefix)) mesh.setEnabled(false);
+      }
+    }
+  } catch (error) {
+    for (const mesh of meshes) mesh.setEnabled?.(false);
+    root?.setEnabled(false);
+    const detail = String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 180);
+    console.info(`[furniture] ${name} は手続き生成のままにします: ${detail}`);
+  }
+}
+
+function loadFurnitureAssets(context) {
+  const { scene } = context;
+  if (furnitureAssetLoadScenes.has(scene)) return;
+  furnitureAssetLoadScenes.add(scene);
+  for (const [name, config] of Object.entries(FURNITURE_ASSETS)) void loadFurnitureProp(name, config, context);
+}
+
 function createLabelPlane(name, text, position, scene) {
   const plane = BABYLON.MeshBuilder.CreatePlane(name, { width: 1.25, height: 0.45 }, scene);
   plane.position.copyFrom(position);
@@ -1755,6 +1899,7 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     lensRim: lensGlowRim,
     prefersReducedMotion,
   });
+  loadFurnitureAssets({ scene });
   const dressingAnchors = new Map();
   loadDressingAssets({
     scene,
