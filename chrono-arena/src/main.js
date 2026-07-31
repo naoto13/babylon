@@ -504,7 +504,9 @@ function createPlayer() {
   // ねんどろいど版は身長 1.8m に正規化済み。1.9 だと頭の大きい体型のぶん画面占有が
   // 過大で、中央のリングをはみ出した。実機で 1.9 / 1.65 / 1.45 を比べて 1.65 を採用。
   modelAnchor.scaling.setAll(1.65);
-  modelAnchor.rotation.y = Math.PI;
+  // TRELLIS.2 版は正面が -Z を向いており、旧モデル（正面 +Z）用の 180 度補正は不要。
+  // 補正を残していたため S（手前へ移動）で背中を見せていた。実効向きを実機で測って確認済み。
+  modelAnchor.rotation.y = 0;
 
   const heroContainer = modelContainers.get("hero");
   heroContainer.addAllToScene();
