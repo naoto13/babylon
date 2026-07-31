@@ -3,6 +3,23 @@ export const ARENA_RADIUS = 15.25;
 export const BOSS_SPAWN_REMAINING_SECONDS = 15;
 export const INITIAL_ENEMY_COUNT = 4;
 
+// 雷撃は通常弾とは独立した、予兆を見て回避するための直線攻撃。
+// 調整対象の数値をここへ集約し、描画と当たり判定の幅を同じ値から参照する。
+export const LIGHTNING_STRIKE_CONFIG = Object.freeze({
+  shooterOwnershipChance: 0.25,
+  cooldownMinSeconds: 6,
+  cooldownMaxSeconds: 8,
+  telegraphSeconds: 1,
+  length: 22,
+  width: 0.5,
+  playerRadius: 0.5,
+  damage: 18,
+  travelSeconds: 0.15,
+  lingerSeconds: 0.25,
+  poolCapacity: 6,
+  activationRange: 17
+});
+
 export const UPGRADES = Object.freeze({
   blade: Object.freeze({
     id: "blade",
@@ -32,6 +49,31 @@ export function isWithinHorizontalRadius(a, b, radius) {
   const deltaX = a.x - b.x;
   const deltaZ = a.z - b.z;
   return deltaX * deltaX + deltaZ * deltaZ <= radius * radius;
+}
+
+export function isWithinLineSegmentRadius(point, start, end, radius) {
+  const segmentX = end.x - start.x;
+  const segmentZ = end.z - start.z;
+  const lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
+  if (lengthSquared === 0) return isWithinHorizontalRadius(point, start, radius);
+
+  const projection = ((point.x - start.x) * segmentX + (point.z - start.z) * segmentZ) / lengthSquared;
+  const t = Math.max(0, Math.min(1, projection));
+  const closestX = start.x + segmentX * t;
+  const closestZ = start.z + segmentZ * t;
+  const deltaX = point.x - closestX;
+  const deltaZ = point.z - closestZ;
+  return deltaX * deltaX + deltaZ * deltaZ <= radius * radius;
+}
+
+export function canEnemyCastLightning(type, roll = Math.random()) {
+  return type === "boss" || (type === "shooter" && roll < LIGHTNING_STRIKE_CONFIG.shooterOwnershipChance);
+}
+
+export function getLightningStrikeCooldown(roll = Math.random()) {
+  const clampedRoll = Math.max(0, Math.min(1, roll));
+  return LIGHTNING_STRIKE_CONFIG.cooldownMinSeconds
+    + (LIGHTNING_STRIKE_CONFIG.cooldownMaxSeconds - LIGHTNING_STRIKE_CONFIG.cooldownMinSeconds) * clampedRoll;
 }
 
 export function getSpawnInterval(elapsedSeconds) {

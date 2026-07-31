@@ -44,7 +44,16 @@ def requested_name() -> str:
     if len(arguments) != 1:
         raise RuntimeError("Expected one bare name, for example: -- hero-nendo")
     name = arguments[0]
-    if name not in {"hero-nendo", "chaser-nendo", "shooter-nendo", "thief-nendo", "boss-nendo"}:
+    # *-nendo-trellis2 は画像→3DをSPAR3DからTRELLIS.2へ差し替えた版。
+    # リグ規約（16骨・EXPECTED_BONES）は同じなので、このスクリプトのモーションが
+    # そのまま流用できる。
+    if name not in {
+        "hero-nendo", "hero-nendo-trellis2",
+        "chaser-nendo", "chaser-nendo-trellis2",
+        "shooter-nendo", "shooter-nendo-trellis2",
+        "thief-nendo", "thief-nendo-trellis2",
+        "boss-nendo", "boss-nendo-trellis2",
+    }:
         raise RuntimeError(f"Unsupported nendoroid name: {name!r}")
     return name
 
@@ -214,49 +223,74 @@ def create_actions(armature: bpy.types.Object, *, is_hero: bool) -> dict[str, bp
          (13, locomotion_pose(math.pi)), (19, locomotion_pose(math.pi * 1.5)), (25, locomotion_pose(math.pi * 2))],
     )
 
+    # 腕主体の振りにする。以前は Chest の Z が -0.50→+0.66（66度）も振れていて、
+    # 腕を振っているのではなく胴ごと回っているように見えた。胴の振れを約1/3に抑え、
+    # 代わりに UpperArm と LowerArm の振り幅を広げて肘の曲げ伸ばしを見せる。
     attack_windup = {
-        "Hips": {"location": (0.0, 0.025, -0.035), "rotation": (0.0, 0.0, -0.28), "scale": (1.09, 1.02, 0.91)},
-        "Spine": {"rotation": (0.06, -0.10, -0.24)},
-        "Chest": {"rotation": (0.10, -0.18, -0.50)},
-        "Neck": {"rotation": (-0.03, 0.10, 0.18)},
-        "Head": {"rotation": (-0.06, 0.16, 0.27)},
-        "UpperArm.L": {"rotation": (-1.04, 0.22, 0.68)},
-        "LowerArm.L": {"rotation": (-0.34, 0.0, 0.35)},
-        "UpperArm.R": {"rotation": (0.72, -0.20, -0.68)},
-        "LowerArm.R": {"rotation": (-0.26, 0.0, -0.25)},
+        "Hips": {"location": (0.0, 0.025, -0.035), "rotation": (0.0, 0.0, -0.10), "scale": (1.06, 1.02, 0.94)},
+        "Spine": {"rotation": (0.04, -0.06, -0.09)},
+        "Chest": {"rotation": (0.06, -0.10, -0.17)},
+        "Neck": {"rotation": (-0.02, 0.06, 0.07)},
+        "Head": {"rotation": (-0.04, 0.10, 0.10)},
+        # 振りかぶり: 腕を大きく後方上へ引き、肘を深く畳む
+        "UpperArm.L": {"rotation": (-1.38, 0.30, 1.02)},
+        "LowerArm.L": {"rotation": (-0.95, 0.0, 0.62)},
+        "UpperArm.R": {"rotation": (0.95, -0.26, -0.95)},
+        "LowerArm.R": {"rotation": (-0.72, 0.0, -0.48)},
     }
     attack_hit = {
-        "Hips": {"location": (0.0, -0.060, 0.025), "rotation": (0.0, 0.0, 0.34), "scale": (0.95, 1.02, 1.08)},
-        "Spine": {"rotation": (-0.08, 0.10, 0.28)},
-        "Chest": {"rotation": (-0.14, 0.20, 0.66)},
-        "Neck": {"rotation": (0.04, -0.10, -0.18)},
-        "Head": {"rotation": (0.08, -0.16, -0.28)},
-        "UpperArm.L": {"rotation": (0.72, -0.30, -0.94)},
-        "LowerArm.L": {"rotation": (0.24, 0.08, -0.42)},
-        "UpperArm.R": {"rotation": (-0.72, 0.22, 0.72)},
-        "LowerArm.R": {"rotation": (0.18, -0.04, 0.36)},
+        "Hips": {"location": (0.0, -0.060, 0.025), "rotation": (0.0, 0.0, 0.12), "scale": (0.96, 1.02, 1.06)},
+        "Spine": {"rotation": (-0.05, 0.06, 0.10)},
+        "Chest": {"rotation": (-0.09, 0.12, 0.22)},
+        "Neck": {"rotation": (0.03, -0.06, -0.07)},
+        "Head": {"rotation": (0.05, -0.10, -0.10)},
+        # 振り下ろし: 腕を前下方へ払い、肘を伸ばし切る
+        "UpperArm.L": {"rotation": (1.05, -0.38, -1.32)},
+        "LowerArm.L": {"rotation": (0.52, 0.10, -0.86)},
+        "UpperArm.R": {"rotation": (-1.02, 0.28, 1.05)},
+        "LowerArm.R": {"rotation": (0.46, -0.06, 0.78)},
     }
     attack_follow = {
-        "Hips": {"rotation": (0.0, 0.0, 0.12)},
-        "Chest": {"rotation": (-0.05, 0.06, 0.24)},
-        "Head": {"rotation": (0.03, -0.05, -0.08)},
-        "UpperArm.L": {"rotation": (0.28, -0.12, -0.36)},
-        "UpperArm.R": {"rotation": (-0.24, 0.10, 0.32)},
+        "Hips": {"rotation": (0.0, 0.0, 0.05)},
+        "Chest": {"rotation": (-0.03, 0.04, 0.09)},
+        "Head": {"rotation": (0.02, -0.03, -0.04)},
+        # 振り抜き後の戻り。腕だけが余韻で揺れる
+        "UpperArm.L": {"rotation": (0.44, -0.16, -0.52)},
+        "LowerArm.L": {"rotation": (0.20, 0.04, -0.30)},
+        "UpperArm.R": {"rotation": (-0.40, 0.14, 0.48)},
+        "LowerArm.R": {"rotation": (0.16, -0.02, 0.26)},
     }
     actions["Attack"] = build_action(
         armature, "Attack", [(1, {}), (5, attack_windup), (10, attack_hit), (15, attack_follow), (21, {})]
     )
 
+    # 頭は全高の4割を占めるので、少しの回転でも首がねじれて見える。
+    # 以前は Head が X-0.34 / Z-0.32 の複合回転で、しかも Neck が同方向に回って
+    # 角度が累積し、頭だけ不自然に傾いていた。頭は後ろへ仰ぐ X 成分だけに絞り、
+    # Neck は Head と逆向きにわずかに戻して累積を打ち消す。
     hit_recoil = {
-        "Hips": {"location": (0.0, 0.040, -0.055), "rotation": (-0.12, 0.0, -0.20), "scale": (1.10, 1.02, 0.91)},
-        "Spine": {"rotation": (0.18, 0.0, 0.15)},
-        "Chest": {"rotation": (0.38, 0.0, 0.34)},
-        "Neck": {"rotation": (-0.14, 0.0, -0.16)},
-        "Head": {"rotation": (-0.34, 0.0, -0.32)},
-        "UpperArm.L": {"rotation": (-0.28, 0.0, 0.40)},
-        "UpperArm.R": {"rotation": (-0.28, 0.0, -0.40)},
+        "Hips": {"location": (0.0, 0.030, -0.050), "rotation": (-0.10, 0.0, -0.06), "scale": (1.08, 1.02, 0.93)},
+        "Spine": {"rotation": (0.16, 0.0, 0.05)},
+        "Chest": {"rotation": (0.30, 0.0, 0.10)},
+        "Neck": {"rotation": (0.06, 0.0, -0.03)},
+        "Head": {"rotation": (-0.16, 0.0, 0.0)},
+        "UpperArm.L": {"rotation": (-0.34, 0.0, 0.44)},
+        "UpperArm.R": {"rotation": (-0.34, 0.0, -0.44)},
+        "LowerArm.L": {"rotation": (-0.20, 0.0, 0.18)},
+        "LowerArm.R": {"rotation": (-0.20, 0.0, -0.18)},
     }
-    actions["Hit"] = build_action(armature, "Hit", [(1, {}), (4, hit_recoil), (8, hit_recoil), (14, {})])
+    # 衝撃を受けきった後に少し戻す中間ポーズ。以前は 4〜8 フレームで同じポーズを
+    # 保持していて、のけぞったまま静止する不自然さがあった。
+    hit_settle = {
+        "Hips": {"location": (0.0, 0.012, -0.020), "rotation": (-0.04, 0.0, -0.02)},
+        "Spine": {"rotation": (0.07, 0.0, 0.02)},
+        "Chest": {"rotation": (0.13, 0.0, 0.04)},
+        "Neck": {"rotation": (0.02, 0.0, -0.01)},
+        "Head": {"rotation": (-0.06, 0.0, 0.0)},
+        "UpperArm.L": {"rotation": (-0.14, 0.0, 0.18)},
+        "UpperArm.R": {"rotation": (-0.14, 0.0, -0.18)},
+    }
+    actions["Hit"] = build_action(armature, "Hit", [(1, {}), (3, hit_recoil), (8, hit_settle), (14, {})])
 
     if is_hero:
         dash_pose = {
@@ -517,9 +551,17 @@ def main() -> None:
         raise RuntimeError(f"Missing rigged source GLB: {source}")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output = OUTPUT_DIR / f"{name}-animated.glb"
-    is_hero = name == "hero-nendo"
+    is_hero = name.startswith("hero-nendo")
     expected_clips = HERO_CLIPS if is_hero else ENEMY_CLIPS
-    budget = 3 * 1024 * 1024 if is_hero else int(1.5 * 1024 * 1024)
+    # TRELLIS.2版はテクスチャ解像度が高く、この非圧縮GLBの時点では本来の予算を
+    # 超える。gltfpackで圧縮した models/ 側が本編の読み込み対象なので、ここでは
+    # 中間生成物として緩い上限で通し、圧縮後のサイズで予算を守る。
+    if name.endswith("-nendo-trellis2"):
+        budget = 8 * 1024 * 1024
+    elif is_hero:
+        budget = 3 * 1024 * 1024
+    else:
+        budget = int(1.5 * 1024 * 1024)
     log(f"START blender={bpy.app.version_string} source={source} expected={','.join(expected_clips)}")
     clear_scene()
     bpy.ops.import_scene.gltf(filepath=str(source))

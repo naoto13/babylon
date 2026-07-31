@@ -1,4 +1,9 @@
 import "@babylonjs/loaders/glTF/2.0/glTFLoader.js";
+// 本編と同じ拡張を登録しておく。gltfpack 圧縮後の GLB もこの画面で検証できるようにする。
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_mesh_quantization.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_meshopt_compression.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_texture_webp.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_texture_transform.js";
 
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
@@ -23,6 +28,8 @@ import { Scene } from "@babylonjs/core/scene.js";
 const canvas = document.querySelector("#render-canvas");
 const modelSelect = document.querySelector("#model-select");
 const setSelect = document.querySelector("#set-select");
+const viewSelect = document.querySelector("#view-select");
+const motionSelect = document.querySelector("#motion-select");
 const status = document.querySelector("#status");
 
 const MODEL_ORDER = Object.freeze(["hero", "chaser", "shooter", "thief", "boss"]);
@@ -36,36 +43,59 @@ const models = Object.freeze({
     // リグ付き版（Voxel Remesh → UV再展開 → 三面図投影 → 16ボーン）。身長1.8m基準。
     newPath: new URL("../assets/production/demonic/rigged/hero-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/chrono-duelist-custom.glb", import.meta.url).href,
+    // TRELLIS.2版はアニメーション込みの成果物を見たいので -animated を指す。
+    trellis2Path: new URL("../assets/production/demonic/animated/hero-nendo-trellis2-animated.glb", import.meta.url).href,
+    // gltfpack 圧縮後の、本編が実際に読む GLB。圧縮で見た目が変わっていないかを
+    // 同じライティング下で直接比較できるようにしておく。
+    packedPath: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.9,
-    oldScale: 1.32
+    oldScale: 1.32,
+    trellis2Scale: 1.9,
+    packedScale: 1.9
   },
   chaser: {
     label: "Chaser",
     newPath: new URL("../assets/production/demonic/rigged/chaser-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-chaser-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/chaser-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/chaser-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.5,
-    oldScale: 1.28
+    oldScale: 1.28,
+    trellis2Scale: 1.5,
+    packedScale: 1.5
   },
   shooter: {
     label: "Shooter",
     newPath: new URL("../assets/production/demonic/rigged/shooter-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-shooter-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/shooter-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/shooter-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.8,
-    oldScale: 1.24
+    oldScale: 1.24,
+    trellis2Scale: 1.8,
+    packedScale: 1.8
   },
   thief: {
     label: "Thief",
     newPath: new URL("../assets/production/demonic/rigged/thief-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-thief-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/thief-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/thief-nendo-trellis2.glb", import.meta.url).href,
     newScale: 1.7,
-    oldScale: 1.28
+    oldScale: 1.28,
+    trellis2Scale: 1.7,
+    packedScale: 1.7
   },
   boss: {
     label: "Boss",
     newPath: new URL("../assets/production/demonic/rigged/boss-nendo-rigged.glb", import.meta.url).href,
     oldPath: new URL("../assets/production/models/enemy-boss-concept.glb", import.meta.url).href,
+    trellis2Path: new URL("../assets/production/demonic/animated/boss-nendo-trellis2-animated.glb", import.meta.url).href,
+    packedPath: new URL("../assets/production/models/boss-nendo-trellis2.glb", import.meta.url).href,
     newScale: 2.2,
-    oldScale: 1.42
+    oldScale: 1.42,
+    trellis2Scale: 2.2,
+    packedScale: 2.2
   }
 });
 
@@ -157,6 +187,7 @@ function initScene() {
   camera.setTarget(new Vector3(0, 1.05, 0));
   camera.fov = 0.58;
   camera.minZ = 0.1;
+  activeCamera = camera;
 
   const ambient = new HemisphericLight("ambient-light", new Vector3(0, 1, 0), scene);
   ambient.intensity = 0.92;
@@ -199,13 +230,24 @@ function initScene() {
   createArena();
 }
 
+const SETS = Object.freeze(["trellis2", "packed", "new", "old"]);
+// 主人公は Run/Dash/FutureSlash、敵は Move/Death を持つ。相手が持たないクリップを
+// 選んでも applyMotion が無視するだけなので、両方まとめて並べておく。
+const MOTIONS = Object.freeze([
+  "none", "Idle", "Run", "Move", "Attack", "Dash", "Hit", "Death", "FutureSlash"
+]);
+
 function readSettings() {
   const query = new URLSearchParams(window.location.search);
   const model = query.get("model");
   const set = query.get("set");
+  const view = query.get("view");
+  const motion = query.get("motion");
   return {
     model: model === "all" || MODEL_ORDER.includes(model) ? model : "hero",
-    set: set === "old" ? "old" : "new"
+    set: SETS.includes(set) ? set : "trellis2",
+    view: view in CAMERA_VIEWS ? view : "front",
+    motion: MOTIONS.includes(motion) ? motion : "none"
   };
 }
 
@@ -213,6 +255,8 @@ function writeSettings(settings) {
   const query = new URLSearchParams(window.location.search);
   query.set("model", settings.model);
   query.set("set", settings.set);
+  query.set("view", settings.view);
+  query.set("motion", settings.motion);
   history.replaceState(null, "", `${window.location.pathname}?${query.toString()}`);
 }
 
@@ -237,10 +281,29 @@ function placeOnArena(anchor) {
   anchor.position.y += FLOOR_Y - lowestY;
 }
 
+function sourceFor(definition, set) {
+  // TRELLIS.2版・packed版が無いモデル（敵4体）は、比較のためSPAR3D版へフォールバックする。
+  if (set === "trellis2") {
+    return {
+      path: definition.trellis2Path ?? definition.newPath,
+      scale: definition.trellis2Scale ?? definition.newScale,
+      isFallback: !definition.trellis2Path
+    };
+  }
+  if (set === "packed") {
+    return {
+      path: definition.packedPath ?? definition.newPath,
+      scale: definition.packedScale ?? definition.newScale,
+      isFallback: !definition.packedPath
+    };
+  }
+  if (set === "new") return { path: definition.newPath, scale: definition.newScale, isFallback: false };
+  return { path: definition.oldPath, scale: definition.oldScale, isFallback: false };
+}
+
 async function loadModel(name, set, x, version) {
   const definition = models[name];
-  const scale = set === "new" ? definition.newScale : definition.oldScale;
-  const source = set === "new" ? definition.newPath : definition.oldPath;
+  const { path: source, scale, isFallback } = sourceFor(definition, set);
   const container = await LoadAssetContainerAsync(source, scene);
   if (version !== loadVersion) {
     container.dispose();
@@ -255,21 +318,67 @@ async function loadModel(name, set, x, version) {
   anchor.scaling.setAll(scale);
   placeOnArena(anchor);
   for (const mesh of anchor.getChildMeshes(false)) shadowGenerator.addShadowCaster(mesh);
-  const item = { anchor, container, label: definition.label, scale };
+  const animations = new Map(container.animationGroups.map((group) => [group.name, group]));
+  for (const group of container.animationGroups) group.stop();
+  const item = { anchor, container, label: definition.label, scale, animations, isFallback };
   // 読み込み途中にセットを切り替えても、完了済みのモデルを必ず破棄できるよう登録する。
   previewItems.push(item);
   return item;
 }
 
-function formatStatus(items, set) {
-  const kind = set === "new" ? "new material GLB" : "current game GLB";
-  return `${kind} / ${items.map((item) => `${item.label} × ${item.scale.toFixed(2)}`).join(" · ")}`;
+function applyMotion(items, motion) {
+  for (const item of items) {
+    for (const group of item.animations.values()) group.stop();
+    if (motion === "none") continue;
+    const group = item.animations.get(motion);
+    if (group) group.start(true);
+  }
+}
+
+// 俯瞰の本編カメラでは装甲の陰影しか読めないので、意匠の確認用に真正面/側面/背面も選べるようにする。
+// Hero は身長1.8m×スケール1.9 ≒ 3.4m あるので、全身が収まる距離まで引く。
+const CAMERA_VIEWS = Object.freeze({
+  front: { position: new Vector3(0, 1.8, -8.4), target: new Vector3(0, 1.7, 0), fov: 0.58 },
+  game: { position: new Vector3(0, 5.9, -4.8), target: new Vector3(0, 1.05, 0), fov: 0.58 },
+  side: { position: new Vector3(-8.4, 1.8, 0), target: new Vector3(0, 1.7, 0), fov: 0.58 },
+  back: { position: new Vector3(0, 1.8, 8.4), target: new Vector3(0, 1.7, 0), fov: 0.58 },
+  turntable: { position: new Vector3(0, 2.2, -8.4), target: new Vector3(0, 1.7, 0), fov: 0.58, spin: true }
+});
+
+let activeCamera;
+let turntableEnabled = false;
+
+function applyView(viewName) {
+  const view = CAMERA_VIEWS[viewName] ?? CAMERA_VIEWS.front;
+  activeCamera.position.copyFrom(view.position);
+  activeCamera.setTarget(view.target);
+  activeCamera.fov = view.fov;
+  turntableEnabled = Boolean(view.spin);
+}
+
+const SET_LABELS = Object.freeze({
+  trellis2: "TRELLIS.2 GLB",
+  packed: "TRELLIS.2 packed (in-game)",
+  new: "SPAR3D nendo GLB",
+  old: "current game GLB"
+});
+
+function formatStatus(items, settings) {
+  const kind = SET_LABELS[settings.set] ?? settings.set;
+  const parts = items.map((item) => {
+    const clips = item.animations.size ? `${item.animations.size} clips` : "no clips";
+    const fallback = item.isFallback ? " (SPAR3D fallback)" : "";
+    return `${item.label} × ${item.scale.toFixed(2)} / ${clips}${fallback}`;
+  });
+  return `${kind} / ${settings.view} / motion:${settings.motion} — ${parts.join(" · ")}`;
 }
 
 async function renderSelection() {
   const settings = {
     model: modelSelect.value,
-    set: setSelect.value
+    set: setSelect.value,
+    view: viewSelect.value,
+    motion: motionSelect.value
   };
   const version = ++loadVersion;
   writeSettings(settings);
@@ -284,8 +393,10 @@ async function renderSelection() {
     );
     if (version !== loadVersion) return;
     previewItems = items.filter(Boolean);
+    applyView(settings.view);
+    applyMotion(previewItems, settings.motion);
     status.dataset.state = "ready";
-    status.textContent = formatStatus(previewItems, settings.set);
+    status.textContent = formatStatus(previewItems, settings);
   } catch (error) {
     if (version !== loadVersion) return;
     // 残りの並列ロードを無効化し、先に完了したモデルも片付ける。
@@ -301,8 +412,23 @@ function bindControls() {
   const settings = readSettings();
   modelSelect.value = settings.model;
   setSelect.value = settings.set;
+  viewSelect.value = settings.view;
+  motionSelect.value = settings.motion;
   modelSelect.addEventListener("change", renderSelection);
   setSelect.addEventListener("change", renderSelection);
+  // View と Motion はモデルを読み直す必要がないので、その場で反映して待ち時間をなくす。
+  viewSelect.addEventListener("change", () => {
+    applyView(viewSelect.value);
+    const current = { model: modelSelect.value, set: setSelect.value, view: viewSelect.value, motion: motionSelect.value };
+    writeSettings(current);
+    status.textContent = formatStatus(previewItems, current);
+  });
+  motionSelect.addEventListener("change", () => {
+    applyMotion(previewItems, motionSelect.value);
+    const current = { model: modelSelect.value, set: setSelect.value, view: viewSelect.value, motion: motionSelect.value };
+    writeSettings(current);
+    status.textContent = formatStatus(previewItems, current);
+  });
 }
 
 initScene();
@@ -315,6 +441,9 @@ window.__preview = { get engine() { return engine; }, get scene() { return scene
 engine.runRenderLoop(() => {
   const deltaSeconds = Math.min(0.04, engine.getDeltaTime() / 1000);
   for (const item of clockwork) item.mesh.rotation.y += item.speed * deltaSeconds;
+  if (turntableEnabled) {
+    for (const item of previewItems) item.anchor.rotation.y += 0.6 * deltaSeconds;
+  }
   scene.render();
 });
 

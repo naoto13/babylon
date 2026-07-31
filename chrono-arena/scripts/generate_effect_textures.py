@@ -281,6 +281,16 @@ def rune_mask(kind: str) -> Image.Image:
         scaled = [(x * AA, y * AA) for x, y in points]
         draw.line(scaled + [scaled[0]], fill=240, width=max(1, round(width * AA)), joint="curve")
 
+    def filled_polygon(points: list[tuple[float, float]], fill: int = 235) -> None:
+        """装飾の面を描く。時計針のように線だけでは読めない形へ使う。"""
+        draw.polygon([(x * AA, y * AA) for x, y in points], fill=fill)
+
+    def small_ring(point: tuple[float, float], radius: float, width: float = 1.4, fill: int = 230) -> None:
+        """歯車のリベットなど、中心以外に置く小さな円環。"""
+        x, y = point[0] * AA, point[1] * AA
+        r = radius * AA
+        draw.ellipse((x - r, y - r, x + r, y + r), outline=fill, width=max(1, round(width * AA)))
+
     # 全属性が共有する外縁。中身の記号で用途を読み分けられるようにする。
     ring(226, 2.5)
     ring(208, 1.1)
@@ -311,30 +321,57 @@ def rune_mask(kind: str) -> Image.Image:
             angle = index * math.tau / 8
             line([polar((256, 256), 199, angle - 0.08), polar((256, 256), 218, angle + 0.08)], 3.0)
     elif kind == "void":
-        ring(158, 1.8)
-        # 下向きの頂点を持つ五芒星風の逆シンボル。
-        star = [polar((256, 256), 117, math.pi / 2 + step * math.tau / 5) for step in range(5)]
+        # 渦ではなく、逆五芒星と直線的な棘を主役にした禍々しい紋章。
+        ring(181, 1.8)
+        polygon([polar((256, 256), 194, -math.pi / 2 + step * math.tau / 10) for step in range(10)], 1.7)
+        polygon([polar((256, 256), 166, -math.pi / 2 + step * math.tau / 10) for step in range(10)], 1.25)
+        # 下向きの頂点を持つ五芒星風の逆シンボルを、中央の主役として残す。
+        star = [polar((256, 256), 121, math.pi / 2 + step * math.tau / 5) for step in range(5)]
         order = [0, 2, 4, 1, 3]
-        polygon([star[item] for item in order], 2.8)
+        polygon([star[item] for item in order], 3.0)
         for arm in range(5):
-            points = []
-            for step in range(54):
-                t = step / 53.0
-                angle = arm * math.tau / 5 + t * math.tau * 0.86
-                radius = 187 - t * 118
-                points.append(polar((256, 256), radius, angle))
-            line(points, 1.6, fill=205)
+            angle = math.pi / 2 + arm * math.tau / 5
+            # 外周から星へ向かう楔と、その先端の短い棘。曲線・収束線は一切使わない。
+            polygon(
+                [
+                    polar((256, 256), 154, angle - 0.105),
+                    polar((256, 256), 190, angle - 0.046),
+                    polar((256, 256), 202, angle),
+                    polar((256, 256), 190, angle + 0.046),
+                    polar((256, 256), 154, angle + 0.105),
+                ],
+                2.0,
+            )
+            line([polar((256, 256), 127, angle), polar((256, 256), 150, angle)], 2.2)
+        # 五芒星の中心を塗り潰さず、重ねた地面やキャラクターを見せる余白にする。
+        ring(42, 1.25)
     elif kind == "chrono":
-        ring(170, 2.2)
+        # 太細のリングを重ね、時計の文字盤と歯車帯を分けて読ませる。
+        ring(170, 2.3)
+        ring(128, 1.7)
         for tick in range(60):
             angle = tick * math.tau / 60 - math.pi / 2
             outer = 214
             inner = 193 if tick % 5 == 0 else 201
             line([polar((256, 256), inner, angle), polar((256, 256), outer, angle)], 2.4 if tick % 5 == 0 else 1.1)
+        # 24枚の台形歯と12個のリベットで、外側を機械式の歯車帯にする。
+        for tooth in range(24):
+            angle = tooth * math.tau / 24 - math.pi / 2
+            polygon(
+                [
+                    polar((256, 256), 181, angle - 0.035),
+                    polar((256, 256), 190, angle - 0.049),
+                    polar((256, 256), 196, angle - 0.025),
+                    polar((256, 256), 196, angle + 0.025),
+                    polar((256, 256), 190, angle + 0.049),
+                    polar((256, 256), 181, angle + 0.035),
+                ],
+                1.2,
+            )
+        for index in range(12):
+            small_ring(polar((256, 256), 181, index * math.tau / 12 - math.pi / 2), 3.1, 1.1, 220)
+
         # 時計針と、ローマ数字風の I/V/X 刻みを十二方位へ配置する。
-        line([(256, 256), polar((256, 256), 108, -math.pi / 2 + 0.35)], 3.0)
-        line([(256, 256), polar((256, 256), 70, math.pi / 2 + 0.55)], 2.3)
-        ring(18, 2.0)
         glyphs = ("XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI")
         for index, glyph in enumerate(glyphs):
             angle = index * math.tau / 12 - math.pi / 2
@@ -355,6 +392,52 @@ def rune_mask(kind: str) -> Image.Image:
                     line([(base[0] - tangent[0] * 3 - radial[0] * 5, base[1] - tangent[1] * 3 - radial[1] * 5), (base[0] + tangent[0] * 3 + radial[0] * 5, base[1] + tangent[1] * 3 + radial[1] * 5)], 1.4)
                     line([(base[0] - tangent[0] * 3 + radial[0] * 5, base[1] - tangent[1] * 3 + radial[1] * 5), (base[0] + tangent[0] * 3 - radial[0] * 5, base[1] + tangent[1] * 3 - radial[1] * 5)], 1.4)
                 cursor += 8.0
+
+        def ornate_hand(angle: float, length: float, root_width: float, shaft_width: float, tip_length: float) -> None:
+            """紡錘形の針に菱形の透かしと矢尻を与え、単線の針を避ける。"""
+            direction = (math.cos(angle), math.sin(angle))
+            perpendicular = (-direction[1], direction[0])
+
+            def hand_point(distance: float, sideways: float = 0.0) -> tuple[float, float]:
+                return (
+                    256 + direction[0] * distance + perpendicular[0] * sideways,
+                    256 + direction[1] * distance + perpendicular[1] * sideways,
+                )
+
+            outline = [
+                hand_point(-15),
+                hand_point(-7, root_width * 0.48),
+                hand_point(17, root_width),
+                hand_point(length * 0.69, shaft_width),
+                hand_point(length * 0.91, shaft_width * 1.36),
+                hand_point(length + tip_length),
+                hand_point(length * 0.91, -shaft_width * 1.36),
+                hand_point(length * 0.69, -shaft_width),
+                hand_point(17, -root_width),
+                hand_point(-7, -root_width * 0.48),
+            ]
+            filled_polygon(outline, 245)
+            line(outline, 1.05, fill=255)
+            # 針の中央を菱形に抜いて、細部でも装飾的なシルエットを保つ。
+            hole_center = length * 0.49
+            hole = [
+                hand_point(hole_center - 8),
+                hand_point(hole_center, shaft_width * 0.72),
+                hand_point(hole_center + 8),
+                hand_point(hole_center, -shaft_width * 0.72),
+            ]
+            draw.polygon([(x * AA, y * AA) for x, y in hole], fill=0)
+
+        # 長針は細長く上右、短針は太く短く下左へ。形・長さの差で即座に区別できる。
+        ornate_hand(-math.pi / 2 + 0.43, 132, 7.3, 2.8, 13)
+        ornate_hand(math.pi / 2 + 0.65, 86, 9.0, 4.0, 11)
+        # 同心円と八つの爪を持つハブで、二本の針の根元を時計らしく固定する。
+        ring(43, 1.35)
+        ring(30, 2.6)
+        ring(12, 1.8)
+        for claw in range(8):
+            angle = claw * math.tau / 8
+            line([polar((256, 256), 32, angle), polar((256, 256), 42, angle)], 1.55)
     else:
         raise ValueError(f"Unknown rune kind: {kind}")
     return mask
@@ -379,24 +462,89 @@ def colored_rune(kind: str, color: tuple[int, int, int]) -> Image.Image:
 
 
 def swirl() -> Image.Image:
-    """極座標をねじって、中心へ吸い込まれる五本の闇の渦筋を作る。"""
-    x, y = grid(RUNE_SIZE)
-    radius = np.sqrt(x * x + y * y)
-    angle = np.arctan2(y, x)
-    noise = periodic_fbm(x, y, 0.9, seed=191, octaves=4, base_frequency=2.5)
-    twisted = angle + radius * 10.5 + (noise - 0.5) * 1.15
-    # cos の山を細い筋へ変換し、渦が一本のグラデーションに見えないようにする。
-    arms = np.power(np.clip(0.5 + 0.5 * np.cos(twisted * 5.0), 0.0, 1.0), 7.0)
-    wisps = np.power(np.clip(0.5 + 0.5 * np.cos(twisted * 9.0 + radius * 14.0), 0.0, 1.0), 13.0)
-    fade = smoothstep(1.08, 0.18, radius) * smoothstep(0.0, 0.11, radius)
-    alpha = (arms * 0.88 + wisps * 0.40) * fade * (0.56 + noise * 0.44)
-    alpha += np.exp(-(radius * radius) / 0.014) * 0.70
-    return rgba_from_alpha(alpha, 0.43 + 0.42 * np.clip(arms + wisps, 0.0, 1.0))
+    """渦巻きを使わず、中心を指す楔と角環で闇の収束を示す。"""
+    size = RUNE_SIZE * AA
+    center = (size / 2.0, size / 2.0)
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+
+    def point(radius: float, angle: float) -> tuple[float, float]:
+        return center[0] + math.cos(angle) * radius * AA, center[1] + math.sin(angle) * radius * AA
+
+    def line(points: list[tuple[float, float]], width: float, fill: int = 235) -> None:
+        draw.line(points, fill=fill, width=max(1, round(width * AA)), joint="curve")
+
+    def polygon(points: list[tuple[float, float]], width: float, fill: int = 240) -> None:
+        draw.line(points + [points[0]], fill=fill, width=max(1, round(width * AA)), joint="curve")
+
+    def angular_ring(radius: float, sides: int, offset: float, width: float) -> None:
+        polygon([point(radius, offset + index * math.tau / sides) for index in range(sides)], width)
+
+    # 円ではなく角環にすることで、回転して吸い込まれる印象を出さない。
+    angular_ring(222, 8, math.pi / 8, 2.2)
+    angular_ring(188, 8, math.pi / 8, 1.45)
+    angular_ring(142, 8, math.pi / 8, 1.8)
+    angular_ring(68, 8, math.pi / 8, 1.55)
+    angular_ring(46, 8, math.pi / 8, 1.0)
+
+    for index in range(8):
+        angle = index * math.tau / 8 - math.pi / 2
+        # 八本の直線的な楔は中心へ向くが、半径46以内を空けて背景を残す。
+        polygon(
+            [
+                point(204, angle - 0.078),
+                point(159, angle - 0.128),
+                point(106, angle),
+                point(159, angle + 0.128),
+                point(204, angle + 0.078),
+            ],
+            2.25,
+        )
+        line([point(213, angle), point(224, angle)], 2.1)
+        # 楔の根元に短い横棒を足し、単なる放射線ではなく刻印として読ませる。
+        line([point(124, angle - 0.046), point(124, angle + 0.046)], 1.35, 210)
+
+    # 四隅の小さな菱形は着弾点を囲う符号で、中心へ線を集め過ぎない。
+    for index in range(4):
+        angle = index * math.tau / 4 - math.pi / 4
+        radial = (math.cos(angle), math.sin(angle))
+        tangent = (-radial[1], radial[0])
+        anchor = point(94, angle)
+        diamond = [
+            (anchor[0] + radial[0] * 9 * AA, anchor[1] + radial[1] * 9 * AA),
+            (anchor[0] + tangent[0] * 6 * AA, anchor[1] + tangent[1] * 6 * AA),
+            (anchor[0] - radial[0] * 9 * AA, anchor[1] - radial[1] * 9 * AA),
+            (anchor[0] - tangent[0] * 6 * AA, anchor[1] - tangent[1] * 6 * AA),
+        ]
+        polygon(diamond, 1.35, 225)
+
+    # 線の芯を太らせずに、半透明の外光だけを少し広げて地面の上で読みやすくする。
+    glow = mask.filter(ImageFilter.GaussianBlur(6.2 * AA))
+    image = Image.new("RGBA", mask.size, (0, 0, 0, 0))
+    glow_layer = Image.new("RGBA", mask.size, (194, 194, 194, 0))
+    glow_layer.putalpha(glow.point(lambda value: round(value * 0.65)))
+    image.alpha_composite(glow_layer)
+    core_layer = Image.new("RGBA", mask.size, (225, 225, 225, 0))
+    core_layer.putalpha(mask)
+    image.alpha_composite(core_layer)
+    highlight = Image.new("RGBA", mask.size, (255, 255, 255, 0))
+    highlight.putalpha(mask.point(lambda value: round(value * 0.28)))
+    image.alpha_composite(highlight)
+    return image.resize((RUNE_SIZE, RUNE_SIZE), LANCZOS)
 
 
 def alpha_stats(image: Image.Image) -> tuple[int, int, float, int]:
     alpha = np.asarray(image.getchannel("A"), dtype=np.uint8)
     return int(alpha.min()), int(alpha.max()), float(alpha.mean()), int(np.count_nonzero(alpha))
+
+
+def alpha_coverage(image: Image.Image) -> tuple[float, float]:
+    """視認できる半透明と、線画の芯になる高アルファを面積率で返す。"""
+    alpha = np.asarray(image.getchannel("A"), dtype=np.uint8)
+    total = alpha.size
+    semi_transparent = np.count_nonzero((alpha >= 16) & (alpha < 128)) / total * 100.0
+    opaque = np.count_nonzero(alpha >= 128) / total * 100.0
+    return float(opaque), float(semi_transparent)
 
 
 def loop_difference(sheet_image: Image.Image) -> tuple[float, float, float, float]:
@@ -430,7 +578,12 @@ def main() -> None:
     for path in generated:
         image = Image.open(path)
         minimum, maximum, mean, nonzero = alpha_stats(image)
-        print(f"{path.relative_to(ROOT)} mode={image.mode} size={image.width}x{image.height} alpha=min:{minimum} max:{maximum} mean:{mean:.2f} nonzero:{nonzero}")
+        opaque, semi_transparent = alpha_coverage(image)
+        print(
+            f"{path.relative_to(ROOT)} mode={image.mode} size={image.width}x{image.height} "
+            f"alpha=min:{minimum} max:{maximum} mean:{mean:.2f} nonzero:{nonzero} "
+            f"opaque_a128plus:{opaque:.2f}% semi_a16to127:{semi_transparent:.2f}%"
+        )
     for name in ("flame-sheet.png", "smoke-sheet.png", "shockwave-sheet.png"):
         minimum, mean, maximum, seam = loop_difference(Image.open(OUT_DIR / name))
         print(f"loop={name} adjacent_abs_diff=min:{minimum:.3f} mean:{mean:.3f} max:{maximum:.3f} seam_last_to_first:{seam:.3f}")

@@ -118,7 +118,7 @@
     <aside class="preview-panel" aria-label="アセットプレビュー設定">
       <h1>CHRONO ARENA / ASSET PREVIEW</h1>
       <p>本編と同じアリーナ・ライティング条件を、近接カメラで確認します。</p>
-      <p><a href="./effect-preview.html">エフェクト素材プレビューを開く</a></p>
+      <p><a href="./effect-preview.html">エフェクト素材プレビュー</a> / <a href="./combat-preview.html">戦闘モーション・攻撃演出プレビュー</a></p>
       <div class="controls">
         <label>
           MODEL
@@ -134,8 +134,34 @@
         <label>
           SET
           <select id="set-select" aria-label="比較するモデルセット">
-            <option value="new">New material GLB</option>
+            <option value="trellis2">TRELLIS.2 GLB</option>
+            <option value="packed">TRELLIS.2 packed (in-game)</option>
+            <option value="new">SPAR3D nendo GLB</option>
             <option value="old">Current game GLB</option>
+          </select>
+        </label>
+        <label>
+          VIEW
+          <select id="view-select" aria-label="カメラアングル">
+            <option value="front">Front</option>
+            <option value="game">Game (俯瞰)</option>
+            <option value="side">Side</option>
+            <option value="back">Back</option>
+            <option value="turntable">Turntable</option>
+          </select>
+        </label>
+        <label>
+          MOTION
+          <select id="motion-select" aria-label="再生するアニメーション">
+            <option value="none">None (rest)</option>
+            <option value="Idle">Idle</option>
+            <option value="Run">Run (hero)</option>
+            <option value="Move">Move (enemy)</option>
+            <option value="Attack">Attack</option>
+            <option value="Dash">Dash (hero)</option>
+            <option value="Hit">Hit</option>
+            <option value="Death">Death (enemy)</option>
+            <option value="FutureSlash">FutureSlash (hero)</option>
           </select>
         </label>
       </div>
