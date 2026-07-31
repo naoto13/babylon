@@ -388,6 +388,14 @@ function startWorkshop() {
       sellCurrentBottle();
       return;
     }
+    if (actionName === "add-ingredient") {
+      addIngredient(index);
+      return;
+    }
+    if (actionName === "appraise-current") {
+      appraiseCurrentBrew();
+      return;
+    }
     if (actionName === "buy-asset") {
       buyAsset(index);
       return;

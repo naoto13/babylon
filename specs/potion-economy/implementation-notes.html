@@ -20,7 +20,7 @@
       <section><h2>02 逸脱（Deviations）</h2><p class="empty">該当なし</p></section>
       <section><h2>03 トレードオフ（Trade-offs）</h2><p class="empty">該当なし</p></section>
       <section><h2>04 未解決の質問（Open Questions）</h2><p class="empty">該当なし</p></section>
-      <section id="implementation-challenges"><h2>05 実装で悩んだ点</h2><p class="sub">要件解釈や実装方法で判断が必要だった点と、解決に使った根拠。</p><div class="callout"><p><strong>Orca組み込みブラウザで、夜市と開始フローを実機確認した。</strong></p><p class="meta">確認済み: 初期36月貨、夜市でのまな板購入（36→12）、購入済み表示、所持数・工房ランク・資金不足ごとのロック理由、新規開始、注文、作業台、セーブ後の「続きから」。コンソールエラーは0件。制約: 3D当たり判定を全画面走査すると検証タブが不安定になるため、素材ドラッグ→鑑定→売却の完全な実機通し操作は未取得。代替として、経済・保存・錬金を含む35件のNodeテストと構文・差分チェックを実行した。</p></div></section>
+      <section id="implementation-challenges"><h2>05 実装で悩んだ点</h2><p class="sub">要件解釈や実装方法で判断が必要だった点と、解決に使った根拠。</p><div class="callout"><p><strong>3Dドラッグだけでは一部環境で錬金進行が止まるため、投入・鑑定の代替操作を追加した。</strong></p><p class="meta">原因: 素材投入と鑑定が3DキャンバスのPointer Eventだけに依存していた。対処: ドラッグ操作は残しつつ、所持素材ごとの「釜へ入れる」と「鑑定する」を追加し、同じ在庫予約・鑑定処理へ接続した。確認済み: 初期36月貨、夜市でのまな板購入（36→12）、購入済み表示、所持数・工房ランク・資金不足ごとのロック理由、新規開始、投入→鑑定→Common売却（36→57）、セーブ後の「続きから」。コンソールエラーは0件。経済・保存・錬金を含む35件のNodeテストと構文・差分チェックも実行した。</p></div></section>
       <section id="unapproved-recommended-defaults">
         <h2>06 未承認で採用した推奨設定</h2>
         <p class="sub">10分間応答がなかったため採用した値と、その背景・影響・戻し方。</p>

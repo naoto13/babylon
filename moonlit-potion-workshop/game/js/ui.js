@@ -67,6 +67,20 @@ function orderCard(order, state) {
   `, "order-card");
 }
 
+function ingredientPanel(state, materialById) {
+  const inventory = Object.entries(state.economy?.inventory ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => ({ id, count, name: materialById[id]?.name ?? id }));
+  const controls = inventory.length
+    ? inventory.map(({ id, count, name }) => `<button data-action="add-ingredient" data-id="${escapeHtml(id)}">${escapeHtml(name)}を釜へ入れる <small>×${count}</small></button>`).join("")
+    : "<p class=\"muted\">手持ちの素材がない。夜市で仕入れよう。</p>";
+  return panel("素材を入れる", `
+    <p class="muted">瓶を釜へドラッグして注ぐか、ここから確実に投入できる。</p>
+    <div class="ingredient-actions">${controls}</div>
+    <div class="button-row"><button data-action="appraise-current" ${state.brew.items.length < 2 ? "disabled" : ""}>鑑定する</button></div>
+  `, "ingredient-panel");
+}
+
 function appraisalPanel(state) {
   const appraisal = state.appraisal;
   if (!appraisal) return "";
@@ -206,7 +220,7 @@ export function createUI({ root, onAction }) {
     } else if (state.phase === "ORDER") {
       main = `${orderCard(order, state)}${panel("準備", `<p>質問は一度だけ。答えと依頼の言葉を胸に、作業台へ向かおう。</p><button data-action="start-craft">調合を始める</button>`, "center-panel")}`;
     } else if (state.phase === "CRAFT") {
-      main = `${orderCard(order, state)}${panel("作業台", `<p>素材瓶を釜へ。まな板では往復、乳鉢では円を描いて前処理できる。レンズを押すと鑑定する。</p><p class="muted">納品には素材を2〜4個選び、十分に混ぜる必要があります。</p>`, "craft-note")}`;
+      main = `${orderCard(order, state)}${panel("作業台", `<p>素材瓶を釜へ。まな板では往復、乳鉢では円を描いて前処理できる。レンズを押すと鑑定する。</p><p class="muted">納品には素材を2〜4個選び、十分に混ぜる必要があります。</p>`, "craft-note")}${ingredientPanel(state, materialById)}`;
     } else if (state.phase === "APPRAISE") {
       main = `${orderCard(order, state)}${appraisalPanel(state)}`;
     } else if (state.phase === "DELIVER") {
