@@ -1,9 +1,11 @@
 import { MATERIAL_BY_ID, MATERIALS, ORDERS } from "./data.js";
+import { ASSET_CATALOG, canBuyAsset, canBuyMaterial, getPotionOffer, getWorkshopRank, MATERIAL_MARKET, purchaseAsset, purchaseMaterial, refundMaterials, reserveMaterial } from "./economy.js";
 import { appraise, evaluateBrew, judgeDelivery } from "./engine.js";
 import { clearGame, freshGameState, loadGame, saveGame } from "./save.js";
 import { createWorkshopScene } from "./scene.js";
 import { createInteractions } from "./interactions.js";
 import { createLayoutEditor } from "./layout-editor.js";
+import { getSimmerSettings } from "./simmer.js";
 import { createUI } from "./ui.js";
 
 const canvas = document.getElementById("workshop-canvas");
@@ -11,7 +13,6 @@ const root = document.getElementById("ui-root");
 const bootError = document.getElementById("boot-error");
 // Read once: this mode is intentionally selected only during page boot.
 const layoutMode = new URLSearchParams(window.location.search).get("layout") === "1";
-const SIMMER_TARGET_SECONDS = Object.freeze({ low: 5, mid: 3.5, high: 2.5 });
 const defaultTechnique = () => ({ stirQuality: 50, simmer: "none" });
 const effectivePourBand = (material, gentleTechnique) => {
   const band = material.pourBand;
@@ -60,7 +61,7 @@ function startWorkshop() {
       tempBand: state.brew.tempBand,
       stirLaps: state.brew.stirLaps,
     });
-    ui.render({ state, order: ORDERS[state.orderIndex], materialById: MATERIAL_BY_ID, canContinue });
+    ui.render({ state, order: ORDERS[state.orderIndex], materialById: MATERIAL_BY_ID, canContinue, market: marketModel() });
   };
   const saveAndRender = () => {
     state.night = state.orderIndex >= 12 ? 3 : Math.floor(state.orderIndex / 4) + 1;
@@ -69,19 +70,44 @@ function startWorkshop() {
   };
 
   const setNotice = (message) => ui.setMessage(message);
-  const resetBrew = () => {
-    state.brew = { items: [], tempBand: "mid", stirLaps: 0, preps: {}, technique: defaultTechnique() };
+  const refundReservedIngredients = () => {
+    state.economy = refundMaterials(state.economy, state.brew.items.map((item) => item.materialId));
+  };
+  const resetBrew = ({ refund = false } = {}) => {
+    if (refund) refundReservedIngredients();
+    state.brew = { items: [], tempBand: "low", stirLaps: 0, preps: {}, technique: defaultTechnique() };
     state.appraisal = null;
     ui.setInteraction({ pour: null, simmer: null });
   };
   const invalidateAppraisal = () => { state.appraisal = null; };
   const currentOrder = () => ORDERS[state.orderIndex];
 
+  function marketModel() {
+    const rank = getWorkshopRank(state.economy.ownedAssetIds);
+    const owned = new Set(state.economy.ownedAssetIds);
+    return {
+      coins: state.economy.coins,
+      rank,
+      assets: ASSET_CATALOG.map((asset) => ({ ...asset, owned: owned.has(asset.id), canBuy: canBuyAsset(state.economy, asset.id) })),
+      materials: Object.entries(MATERIAL_MARKET).map(([id, entry]) => ({
+        id,
+        name: MATERIAL_BY_ID[id].name,
+        rarity: entry.rarity,
+        price: entry.price,
+        count: state.economy.inventory[id] ?? 0,
+        canBuy: canBuyMaterial(state.economy, id),
+      })),
+    };
+  }
+
   function goBack() {
     if (ui.dismissOverlay()) return;
     if (state.phase === "DELIVER") state.phase = "APPRAISE";
     else if (state.phase === "APPRAISE") state.phase = "CRAFT";
-    else if (state.phase === "CRAFT") state.phase = "ORDER";
+    else if (state.phase === "CRAFT") {
+      state.phase = "ORDER";
+      resetBrew({ refund: true });
+    }
     else if (state.phase === "ORDER") state.phase = "NIGHT_INTRO";
     else return;
     setNotice("一段階戻った。");
@@ -96,6 +122,12 @@ function startWorkshop() {
     }
     const material = MATERIAL_BY_ID[materialId];
     if (!material) return false;
+    const reservation = reserveMaterial(state.economy, materialId);
+    if (!reservation.ok) {
+      setNotice(`${material.name}の在庫がない。市場で仕入れよう。`);
+      return false;
+    }
+    state.economy = reservation.economy;
     state.brew.items.push({ materialId, prep: state.brew.preps[materialId] ?? "none", amount });
     invalidateAppraisal();
     saveAndRender(); // State changes before the independent pour burst in interactions.js.
@@ -145,7 +177,7 @@ function startWorkshop() {
         technique: { ...state.brew.technique },
       };
       const result = evaluateBrew(input);
-      state.appraisal = { input, result, lines: appraise(result) };
+      state.appraisal = { input, result, lines: appraise(result), offer: getPotionOffer(input, result) };
       // The journal records the player's observed brew, never an authored solution.
       state.journal.push({ input, result, recordedAt: new Date().toISOString() });
       state.phase = "APPRAISE";
@@ -169,9 +201,11 @@ function startWorkshop() {
     if (state.phase !== "DELIVER" || deliveryCommitted || !bottle || !currentOrder()) return;
     deliveryCommitted = true;
     const judgement = judgeDelivery(bottle.result, currentOrder()); // Held bottles are judged again for this order.
+    const offer = getPotionOffer(bottle.input, bottle.result, judgement);
     state.reputation += judgement.reputationDelta;
+    state.economy.coins += offer.totalValue;
     if (heldIndex !== null) state.holdShelf[heldIndex] = null;
-    state.delivery = { judgement, source: heldIndex === null ? "current" : "shelf" };
+    state.delivery = { judgement, source: heldIndex === null ? "current" : "shelf", offer };
     state.phase = "EPILOGUE";
     setNotice("瓶を納品トレイへ置いた。");
     saveAndRender();
@@ -204,7 +238,10 @@ function startWorkshop() {
     state.delivery = null;
     deliveryCommitted = false;
     if (state.orderIndex >= ORDERS.length) {
-      state.phase = "ENDING";
+      state.orderIndex = 0;
+      state.holdShelf = [null, null];
+      state.phase = "NIGHT_INTRO";
+      setNotice("依頼帳を最初から開き直した。市場で得た道具と素材は残っている。");
     } else if (state.orderIndex % 4 === 0) {
       // Shelf bottles are intentionally only available inside the night that made them.
       state.holdShelf = [null, null];
@@ -214,6 +251,41 @@ function startWorkshop() {
     }
     // Phase first: resetBrew re-renders via ui.setInteraction, so the state must already be consistent.
     resetBrew();
+    saveAndRender();
+  }
+
+  function sellCurrentBottle() {
+    if (state.phase !== "APPRAISE" || !state.appraisal?.offer) return;
+    const { totalValue } = state.appraisal.offer;
+    state.economy.coins += totalValue;
+    state.phase = "CRAFT";
+    resetBrew();
+    setNotice(`${totalValue} 月貨で市場へ売却した。`);
+    saveAndRender();
+  }
+
+  function buyAsset(assetId) {
+    const result = purchaseAsset(state.economy, assetId);
+    const asset = ASSET_CATALOG.find((entry) => entry.id === assetId);
+    if (!result.ok || !asset) {
+      setNotice("この工房品はいま購入できない。");
+      return;
+    }
+    state.economy = result.economy;
+    sceneApi.setWorkshopOwnership?.(state.economy.ownedAssetIds);
+    setNotice(`${asset.name}を工房へ迎えた。`);
+    saveAndRender();
+  }
+
+  function buyMaterial(materialId) {
+    const result = purchaseMaterial(state.economy, materialId);
+    const listing = MATERIAL_MARKET[materialId];
+    if (!result.ok || !listing) {
+      setNotice("この素材はいま仕入れられない。");
+      return;
+    }
+    state.economy = result.economy;
+    setNotice(`${MATERIAL_BY_ID[materialId].name}を仕入れた。`);
     saveAndRender();
   }
 
@@ -233,12 +305,12 @@ function startWorkshop() {
     onPourGauge: (pour) => ui.setInteraction({ pour }),
     getSimmerSettings: () => {
       if (state.phase !== "CRAFT" || state.brew.items.length === 0) return null;
-      const windowMultiplier = state.settings.gentleTechnique ? 1.5 : 1;
-      return {
-        targetSeconds: SIMMER_TARGET_SECONDS[state.brew.tempBand],
-        perfectWindow: 0.4 * windowMultiplier,
-        goodWindow: 1 * windowMultiplier,
-      };
+      return getSimmerSettings({
+        materialIds: state.brew.items.map((item) => item.materialId),
+        workshopRank: getWorkshopRank(state.economy.ownedAssetIds),
+        tempBand: state.brew.tempBand,
+        gentleTechnique: state.settings.gentleTechnique,
+      });
     },
     onSimmerProgress: (simmer) => ui.setInteraction({ simmer: simmer.active ? simmer : null }),
     onSimmerEnd: ({ result }) => {
@@ -261,6 +333,7 @@ function startWorkshop() {
     engine.dispose();
   }, { once: true });
   engine.runRenderLoop(() => sceneApi.scene.render());
+  sceneApi.setWorkshopOwnership?.(state.economy.ownedAssetIds);
   // Do not overwrite a resumable phase with TITLE before the player chooses it.
   refresh();
 
@@ -309,6 +382,26 @@ function startWorkshop() {
     }
     if (actionName === "to-deliver") {
       enterDelivery();
+      return;
+    }
+    if (actionName === "sell-current") {
+      sellCurrentBottle();
+      return;
+    }
+    if (actionName === "add-ingredient") {
+      addIngredient(index);
+      return;
+    }
+    if (actionName === "appraise-current") {
+      appraiseCurrentBrew();
+      return;
+    }
+    if (actionName === "buy-asset") {
+      buyAsset(index);
+      return;
+    }
+    if (actionName === "buy-material") {
+      buyMaterial(index);
       return;
     }
     if (actionName === "deliver-current" && state.phase === "DELIVER" && state.appraisal) {

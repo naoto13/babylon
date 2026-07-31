@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Potion Economy — Implementation Notes</title>
+    <style>
+      :root { --ink:#15233f; --ink-2:#52627c; --bg:#edf2fb; --paper:#fffdf8; --line:#d7deeb; --accent:#1c7d5b; --accent-soft:#e3f4ed; --warn:#a33c36; --warn-soft:#fbe9e6; --yellow:#d4a72c; --shadow:0 14px 34px rgba(24,43,73,.12); --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",system-ui,sans-serif; }
+      * { box-sizing:border-box; } body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.65 var(--sans); } .wrap { width:min(800px,calc(100% - 32px)); margin:40px auto; } header,section { background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:24px; margin:0 0 18px; } h1,h2,p { margin-top:0; } h1 { margin-bottom:6px; } h2 { font-size:1.08rem; } .kicker,.meta,.sub,footer { color:var(--ink-2); font-size:.9rem; } .callout { border-left:4px solid var(--accent); border-radius:8px; background:var(--accent-soft); padding:12px 14px; margin:12px 0; } .callout.warn { border-color:var(--warn); background:var(--warn-soft); } .callout.open { border-color:var(--yellow); background:#fbf4d5; } .empty { color:var(--ink-2); font-style:italic; } footer { text-align:center; padding:12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <span class="kicker">IMPLEMENTATION NOTES</span>
+        <h1>Potion Economy</h1>
+        <p>仕様からの判断、逸脱、トレードオフ、およびユーザー確認が必要な点を記録する。</p>
+      </header>
+      <section><h2>01 デザインの決定</h2><div class="callout"><p><strong>未購入の操作道具は簡易メッシュを残し、購入GLBは外観の置換として扱う。</strong></p><p class="meta">理由: レンズを含む操作道具まで隠すと、開始時に鑑定と市場売却ができず経済ループが止まるため。影響: 未購入の装飾は非表示、操作道具は同じ操作性のままGLB外観へ置換される。</p></div></section>
+      <section><h2>02 逸脱（Deviations）</h2><p class="empty">該当なし</p></section>
+      <section><h2>03 トレードオフ（Trade-offs）</h2><p class="empty">該当なし</p></section>
+      <section><h2>04 未解決の質問（Open Questions）</h2><p class="empty">該当なし</p></section>
+      <section id="implementation-challenges"><h2>05 実装で悩んだ点</h2><p class="sub">要件解釈や実装方法で判断が必要だった点と、解決に使った根拠。</p><div class="callout"><p><strong>3Dドラッグだけでは一部環境で錬金進行が止まるため、投入・鑑定の代替操作を追加した。</strong></p><p class="meta">原因: 素材投入と鑑定が3DキャンバスのPointer Eventだけに依存していた。対処: ドラッグ操作は残しつつ、所持素材ごとの「釜へ入れる」と「鑑定する」を追加し、同じ在庫予約・鑑定処理へ接続した。確認済み: 初期36月貨、夜市でのまな板購入（36→12）、購入済み表示、所持数・工房ランク・資金不足ごとのロック理由、新規開始、投入→鑑定→Common売却（36→57）、セーブ後の「続きから」。コンソールエラーは0件。経済・保存・錬金を含む35件のNodeテストと構文・差分チェックも実行した。</p></div></section>
+      <section id="unapproved-recommended-defaults">
+        <h2>06 未承認で採用した推奨設定</h2>
+        <p class="sub">10分間応答がなかったため採用した値と、その背景・影響・戻し方。</p>
+        <div class="callout warn"><p><strong>経済バランスの推奨値をローカル実装に採用</strong></p><p class="meta">approval_status: timeout_no_response / approval_bundle_id: potion-economy-v1 / bundle_version: 1 / decision_id: D-001〜D-003 / requested_at: 2026-07-31 05:00 JST / deadline_at: 2026-07-31 05:10 JST / 応答なし。開始36月貨・Common素材6個、3点でUncommon、8点かつTier 2を2点でRare、指定価格と最安素材2個分の予約額を採用。影響: ローカルの経済進行。ロールバック: economy.js の定数と新規セーブの初期値を変更し、既存セーブは移行値を調整する。</p></div>
+      </section>
+      <footer>spec: specs/potion-economy/spec.md / todo: specs/potion-economy/todo.md</footer>
+    </div>
+  </body>
+</html>

@@ -1,8 +1,10 @@
 import { SIDE_EFFECT_BY_ID } from "./data.js";
+import { MATERIAL_MARKET } from "./economy.js";
 
 const TEMP_LABELS = Object.freeze({ low: "弱火", mid: "中火", high: "強火" });
 const PREP_LABELS = Object.freeze({ none: "そのまま", cut: "刻む", crush: "潰す" });
 const EFFECT_LABELS = Object.freeze({ calm: "鎮静", wake: "覚醒", heal: "治癒", shift: "変身" });
+const RARITY_LABELS = Object.freeze({ common: "Common", uncommon: "Uncommon", rare: "Rare" });
 
 const escapeHtml = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -17,6 +19,12 @@ const dots = (value, max = 10) => {
   return `<span class="dots" aria-label="段階 ${filled}">${"●".repeat(filled)}${"○".repeat(Math.max(0, Math.min(max, 5) - filled))}</span>`;
 };
 const panel = (title, body, extra = "") => `<section class="panel ${extra}" aria-label="${escapeHtml(title)}"><h2>${escapeHtml(title)}</h2>${body}</section>`;
+const materialArt = (material, extra = "") => `<img class="material-art ${extra}" src="assets/materials/${encodeURIComponent(material.id)}.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
+const rarityClass = (rarity) => RARITY_LABELS[rarity] ? rarity : "common";
+const rarityBadge = (rarity) => {
+  const normalized = rarityClass(rarity);
+  return `<span class="rarity-badge rarity-${normalized}">${RARITY_LABELS[normalized]}</span>`;
+};
 
 function bottleMaterials(bottle, materialById) {
   return bottle.input.items.map((item) => materialById[item.materialId]?.name ?? item.materialId).join("・");
@@ -41,15 +49,28 @@ function brewSummary(state, materialById, interaction) {
     </div>`;
   })() : "";
   const simmer = interaction.simmer;
-  const simmerLine = simmer?.active ? `<div><span>煮込み</span><strong>${numeric ? `${simmer.elapsed.toFixed(1)} / ${simmer.targetSeconds.toFixed(1)} 秒` : "煮込み中…"}</strong></div>` : "";
+  const simmerMeter = simmer?.active ? (() => {
+    const meterLimit = simmer.targetSeconds + simmer.goodWindow * 1.2;
+    const percent = (value) => Math.min(100, Math.max(0, value / meterLimit * 100));
+    const elapsed = percent(simmer.elapsed);
+    const goodStart = percent(simmer.targetSeconds - simmer.goodWindow);
+    const goodEnd = percent(simmer.targetSeconds + simmer.goodWindow);
+    const perfectStart = percent(simmer.targetSeconds - simmer.perfectWindow);
+    const perfectEnd = percent(simmer.targetSeconds + simmer.perfectWindow);
+    const readout = numeric ? `${simmer.elapsed.toFixed(1)} / ${simmer.targetSeconds.toFixed(1)} 秒` : "黄金の芯で離す";
+    return `<div class="simmer-meter" style="--simmer-value:${elapsed}%;--good-start:${goodStart}%;--good-end:${goodEnd}%;--perfect-start:${perfectStart}%;--perfect-end:${perfectEnd}%" aria-label="火加減メーター。黄金の帯で離すと成功しやすい">
+      <div class="simmer-meter-track" aria-hidden="true"><i class="simmer-good-zone"></i><i class="simmer-perfect-zone"></i><b class="simmer-cursor"></b></div>
+      <div class="simmer-meter-label"><span>${escapeHtml(simmer.difficulty ? `${simmer.difficulty.label}・${simmer.difficulty.source}` : "火加減の山")}</span><strong>${readout}</strong></div>
+    </div>`;
+  })() : "";
   const simmerButton = state.phase === "CRAFT"
-    ? "<button type=\"button\" class=\"quiet simmer-button\" data-hold-action=\"simmer\">煮込み（押し続ける）</button>"
+    ? `<button type="button" class="quiet simmer-button ${simmer?.active ? "simmer-active" : ""}" data-hold-action="simmer">${simmer?.active ? "ここで離す" : "煮込みを始める（押し続ける）"}</button>`
     : "";
   return `<aside class="brew-summary" aria-live="polite">
     <p class="eyebrow">いまの調合</p>
     <p class="ingredients">${escapeHtml(names)}</p>
     <div><span>火加減</span><strong>${TEMP_LABELS[state.brew.tempBand]}</strong></div>
-    <div><span>かき混ぜ</span><strong>${laps}</strong></div>${simmerLine}${pourGauge}${warning}${simmerButton}
+    <div><span>かき混ぜ</span><strong>${laps}</strong></div>${simmerMeter}${pourGauge}${warning}${simmerButton}
   </aside>`;
 }
 
@@ -67,6 +88,21 @@ function orderCard(order, state) {
   `, "order-card");
 }
 
+function ingredientPanel(state, materialById) {
+  const inventory = Object.entries(state.economy?.inventory ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => ({ id, count, material: materialById[id], rarity: MATERIAL_MARKET[id]?.rarity ?? "common" }))
+    .filter(({ material }) => Boolean(material));
+  const controls = inventory.length
+    ? inventory.map(({ id, count, material, rarity }) => `<button class="rarity-frame rarity-${rarityClass(rarity)}" data-action="add-ingredient" data-id="${escapeHtml(id)}">${materialArt(material, "ingredient-art")}<span>${escapeHtml(material.name)}を釜へ入れる <small>${rarityBadge(rarity)} ×${count}</small></span></button>`).join("")
+    : "<p class=\"muted\">手持ちの素材がない。夜市で仕入れよう。</p>";
+  return panel("所持素材", `
+    <p class="muted">瓶を釜へドラッグして注ぐか、この所持品から確実に投入できる。</p>
+    <div class="ingredient-actions">${controls}</div>
+    <div class="button-row"><button data-action="appraise-current" ${state.brew.items.length < 2 ? "disabled" : ""}>鑑定する</button></div>
+  `, "ingredient-panel");
+}
+
 function appraisalPanel(state) {
   const appraisal = state.appraisal;
   if (!appraisal) return "";
@@ -76,12 +112,40 @@ function appraisalPanel(state) {
     <span>${EFFECT_LABELS[effect]}</span><b>${numeric ? value : dots(value / 20)}</b>
   </li>`).join("");
   const stability = numeric ? result.stability : dots(result.stability / 20);
+  const offer = appraisal.offer;
+  const offerLine = offer ? `<p class="market-offer"><b>市場の買取:</b> ${offer.totalValue} 月貨 <span class="muted">(${offer.rarity}・${offer.quality})</span></p>` : "";
   return panel("鑑定結果", `
     <ul class="scores">${scoreCards}<li><span>安定度</span><b>${stability}</b></li><li><span>持続</span><b>${escapeHtml(result.duration === "short" ? "短い" : result.duration === "long" ? "長い" : "中くらい")}</b></li></ul>
     <div class="reason-lines">${appraisal.lines.map((line) => `<p>${escapeHtml(numericMask(line, numeric))}</p>`).join("")}</div>
     ${result.sideEffects.length ? `<p class="warning">副作用：${escapeHtml(result.sideEffects.map((id) => SIDE_EFFECT_BY_ID[id]?.name ?? id).join("・"))}</p>` : "<p class=\"success\">副作用は見つからない。</p>"}
-    <div class="button-row"><button data-action="adjust" class="quiet">調整へ戻る</button><button data-action="to-deliver">納品へ進む</button></div>
+    ${offerLine}
+    <div class="button-row"><button data-action="sell-current">市場へ売却</button><button data-action="adjust" class="quiet">調整へ戻る</button><button data-action="to-deliver" class="quiet">納品へ進む</button></div>
   `, "appraisal-panel");
+}
+
+const MARKET_REASON = Object.freeze({
+  locked: "工房ランクが足りない", funds: "月貨が足りない", reserve: "基本素材2個分を残す必要がある", owned: "購入済み", unknown: "購入できない",
+});
+
+function marketPanel(market) {
+  const assetCards = market.assets.map((asset) => {
+    const status = asset.owned ? "購入済み" : asset.canBuy.ok ? "購入できる" : MARKET_REASON[asset.canBuy.reason];
+    return `<li class="market-card rarity-frame rarity-${rarityClass(asset.rarity)}"><div><b>${escapeHtml(asset.name)}</b><small>${rarityBadge(asset.rarity)} Tier ${asset.tier} · ${asset.price} 月貨</small></div><button data-action="buy-asset" data-id="${escapeHtml(asset.id)}" ${asset.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
+  }).join("");
+  const materialCards = market.materials.map((material) => {
+    const status = material.canBuy.ok ? "1個購入" : MARKET_REASON[material.canBuy.reason];
+    return `<li class="market-card material-market-card rarity-frame rarity-${rarityClass(material.rarity)}">${materialArt(material)}<div><b>${escapeHtml(material.name)}</b><small>${rarityBadge(material.rarity)} 所持 ${material.count} · ${material.price} 月貨</small></div><button data-action="buy-material" data-id="${escapeHtml(material.id)}" ${material.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
+  }).join("");
+  const next = market.rank.next
+    ? `次の棚: 所有 ${market.rank.next.ownedCount} 点${market.rank.next.tierTwoCount ? `（Tier 2を${market.rank.next.tierTwoCount}点含む）` : ""}`
+    : "すべての素材棚を開放済み";
+  return panel("夜市", `
+    <p class="market-balance"><b>${market.coins} 月貨</b><span>${escapeHtml(market.rank.label)}</span></p>
+    <p class="muted">${escapeHtml(next)}。工房品を買った後も、基本素材2個分の月貨は残しておこう。</p>
+    <h3>素材棚</h3><ul class="market-list">${materialCards}</ul>
+    <h3>工房アセット</h3><ul class="market-list">${assetCards}</ul>
+    <button data-action="close-overlay" class="quiet">工房へ戻る</button>
+  `, "modal-panel market-panel");
 }
 
 function deliveryPanel(state, order, materialById) {
@@ -152,7 +216,7 @@ export function createUI({ root, onAction }) {
     const button = event.target.closest("[data-action]");
     if (!button || button.disabled) return;
     const action = button.dataset.action;
-    if (action === "journal" || action === "settings") {
+    if (action === "journal" || action === "settings" || action === "market") {
       overlay = action;
       render();
       return;
@@ -162,14 +226,14 @@ export function createUI({ root, onAction }) {
       render();
       return;
     }
-    onAction(action, button.dataset.index === undefined ? undefined : Number(button.dataset.index));
+    onAction(action, button.dataset.id ?? (button.dataset.index === undefined ? undefined : Number(button.dataset.index)));
   });
 
   function render(nextModel = model) {
     model = nextModel;
     if (!model) return;
-    const { state, order, materialById, canContinue } = model;
-    const topbar = `<header class="topbar"><div><span class="moon">◐</span><span>月夜のポーション工房</span></div><div><button data-action="journal" class="icon-button" aria-label="調合日誌">日誌</button><button data-action="settings" class="icon-button" aria-label="設定">設定</button></div></header>`;
+    const { state, order, materialById, canContinue, market } = model;
+    const topbar = `<header class="topbar"><div><span class="moon">◐</span><span>月夜のポーション工房</span></div><div><span class="coin-readout" aria-label="所持月貨">${market.coins} 月貨</span><button data-action="market" class="icon-button" aria-label="夜市">市場</button><button data-action="journal" class="icon-button" aria-label="調合日誌">日誌</button><button data-action="settings" class="icon-button" aria-label="設定">設定</button></div></header>`;
     let main = "";
     if (state.phase === "TITLE") {
       main = panel("月夜のポーション工房", `<p class="lede">客の言葉を聞き、手元の道具で一瓶を仕立てよう。</p><p class="muted">ドラッグで素材を運び、釜の上で円を描いて混ぜる。右クリックまたは Esc で手放す。</p><div class="button-row"><button data-action="new-game">新しく始める</button>${canContinue ? "<button data-action=\"continue\" class=\"quiet\">続きから</button>" : ""}</div>`, "title-panel");
@@ -178,7 +242,7 @@ export function createUI({ root, onAction }) {
     } else if (state.phase === "ORDER") {
       main = `${orderCard(order, state)}${panel("準備", `<p>質問は一度だけ。答えと依頼の言葉を胸に、作業台へ向かおう。</p><button data-action="start-craft">調合を始める</button>`, "center-panel")}`;
     } else if (state.phase === "CRAFT") {
-      main = `${orderCard(order, state)}${panel("作業台", `<p>素材瓶を釜へ。まな板では往復、乳鉢では円を描いて前処理できる。レンズを押すと鑑定する。</p><p class="muted">納品には素材を2〜4個選び、十分に混ぜる必要があります。</p>`, "craft-note")}`;
+      main = `${orderCard(order, state)}${panel("作業台", `<p>素材瓶を釜へ。まな板では往復、乳鉢では円を描いて前処理できる。レンズを押すと鑑定する。</p><p class="muted">納品には素材を2〜4個選び、十分に混ぜる必要があります。</p>`, "craft-note")}${ingredientPanel(state, materialById)}`;
     } else if (state.phase === "APPRAISE") {
       main = `${orderCard(order, state)}${appraisalPanel(state)}`;
     } else if (state.phase === "DELIVER") {
@@ -187,14 +251,16 @@ export function createUI({ root, onAction }) {
       const delivery = state.delivery;
       const epilogue = order.hidden.epilogues[delivery.judgement.tier];
       const reputation = state.settings.numericValues ? `評判 ${state.reputation >= 0 ? "+" : ""}${state.reputation}` : "評判は月明かりのように変わった。";
-      main = panel("後日談", `<p class="lede">${escapeHtml(epilogue)}</p><p class="${delivery.judgement.tier === "fail" ? "warning" : "success"}">${escapeHtml(delivery.judgement.reasons.join("。"))}</p><p>${escapeHtml(reputation)}</p><button data-action="next-order">次へ</button>`, "center-panel");
+      const earnings = delivery.offer ? `<p class="success">売上：${delivery.offer.totalValue} 月貨</p>` : "";
+      main = panel("後日談", `<p class="lede">${escapeHtml(epilogue)}</p><p class="${delivery.judgement.tier === "fail" ? "warning" : "success"}">${escapeHtml(delivery.judgement.reasons.join("。"))}</p><p>${escapeHtml(reputation)}</p>${earnings}<button data-action="next-order">次へ</button>`, "center-panel");
     } else if (state.phase === "ENDING") {
       const reputation = state.settings.numericValues ? `${state.reputation}` : dots(Math.max(0, state.reputation + 6) / 3, 8);
       main = panel("月が沈むころ", `<p class="lede">十二の依頼を終え、工房には静かな香りだけが残った。</p><p>最終評判：<strong>${reputation}</strong></p><p class="muted">日誌には、あなた自身が確かめた十二通りの手触りが残っている。</p><button data-action="new-game" class="quiet">新しい夜を始める</button>`, "center-panel");
     }
     const notice = message ? `<p class="notice" role="status">${escapeHtml(message)}</p>` : "";
     const modal = overlay === "journal" ? journalPanel(state.journal, materialById, state.settings.numericValues)
-      : overlay === "settings" ? settingsPanel(state.settings) : "";
+      : overlay === "settings" ? settingsPanel(state.settings)
+        : overlay === "market" ? marketPanel(market) : "";
     root.innerHTML = `${topbar}<main class="overlay-main">${main}</main>${brewSummary(state, materialById, interaction)}${notice}${modal ? `<div class="modal-scrim">${modal}</div>` : ""}`;
   }
 
