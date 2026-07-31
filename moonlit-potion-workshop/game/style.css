@@ -103,6 +103,18 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .market-card div { display: grid; gap: .08rem; min-width: 0; }
 .market-card small { color: #bdc8de; }
 .market-card button { flex: 0 0 auto; padding: .38rem .5rem; font-size: .76rem; }
+.rarity-frame {
+  --rarity-border: rgba(149, 189, 231, .58);
+  --rarity-glow: rgba(104, 158, 223, .16);
+  border-color: var(--rarity-border);
+  box-shadow: 0 .35rem .9rem rgba(0, 0, 0, .22), 0 0 .8rem var(--rarity-glow), inset 0 1px rgba(255, 255, 255, .08);
+}
+.rarity-uncommon { --rarity-border: rgba(108, 221, 174, .64); --rarity-glow: rgba(72, 206, 158, .18); }
+.rarity-rare { --rarity-border: rgba(211, 151, 255, .72); --rarity-glow: rgba(194, 112, 255, .22); }
+.rarity-badge { display: inline-block; margin-right: .2rem; padding: .08rem .34rem; border: 1px solid currentColor; border-radius: 999px; font-size: .62rem; font-weight: 700; letter-spacing: .045em; line-height: 1.25; vertical-align: .08em; }
+.rarity-badge.rarity-common { color: #a9c8eb; background: rgba(105, 155, 214, .11); }
+.rarity-badge.rarity-uncommon { color: #87e5bd; background: rgba(81, 202, 151, .12); }
+.rarity-badge.rarity-rare { color: #e0b6ff; background: rgba(190, 115, 245, .13); }
 .ingredient-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .material-art { display: block; inline-size: 3.2rem; block-size: 3.2rem; flex: 0 0 3.2rem; border: 1px solid rgba(226, 236, 255, .26); border-radius: .62rem; object-fit: cover; box-shadow: 0 .3rem .9rem rgba(0, 0, 0, .26); }
 .material-market-card { min-height: 4.7rem; }

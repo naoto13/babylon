@@ -11,6 +11,7 @@ import {
   MATERIAL_MARKET,
   purchaseAsset,
   purchaseMaterial,
+  rarityForAssetTier,
   refundMaterials,
   reserveMaterial,
 } from "../js/economy.js";
@@ -23,6 +24,16 @@ test("the market catalogs all 36 workshop assets and starts with only the cauldr
     inventory: { "moon-petal": 3, mistleaf: 3 },
     ownedAssetIds: ["cauldron"],
   });
+});
+
+test("workshop items receive rarity from their market tier", () => {
+  assert.equal(rarityForAssetTier(0), "common");
+  assert.equal(rarityForAssetTier(1), "common");
+  assert.equal(rarityForAssetTier(2), "uncommon");
+  assert.equal(rarityForAssetTier(3), "rare");
+  assert.equal(ASSET_CATALOG.find((asset) => asset.id === "cauldron")?.rarity, "common");
+  assert.equal(ASSET_CATALOG.find((asset) => asset.id === "books")?.rarity, "uncommon");
+  assert.equal(ASSET_CATALOG.find((asset) => asset.id === "alembic")?.rarity, "rare");
 });
 
 test("workshop ownership unlocks material ranks gradually", () => {

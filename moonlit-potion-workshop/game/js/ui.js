@@ -1,8 +1,10 @@
 import { SIDE_EFFECT_BY_ID } from "./data.js";
+import { MATERIAL_MARKET } from "./economy.js";
 
 const TEMP_LABELS = Object.freeze({ low: "弱火", mid: "中火", high: "強火" });
 const PREP_LABELS = Object.freeze({ none: "そのまま", cut: "刻む", crush: "潰す" });
 const EFFECT_LABELS = Object.freeze({ calm: "鎮静", wake: "覚醒", heal: "治癒", shift: "変身" });
+const RARITY_LABELS = Object.freeze({ common: "Common", uncommon: "Uncommon", rare: "Rare" });
 
 const escapeHtml = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -18,6 +20,11 @@ const dots = (value, max = 10) => {
 };
 const panel = (title, body, extra = "") => `<section class="panel ${extra}" aria-label="${escapeHtml(title)}"><h2>${escapeHtml(title)}</h2>${body}</section>`;
 const materialArt = (material, extra = "") => `<img class="material-art ${extra}" src="assets/materials/${encodeURIComponent(material.id)}.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
+const rarityClass = (rarity) => RARITY_LABELS[rarity] ? rarity : "common";
+const rarityBadge = (rarity) => {
+  const normalized = rarityClass(rarity);
+  return `<span class="rarity-badge rarity-${normalized}">${RARITY_LABELS[normalized]}</span>`;
+};
 
 function bottleMaterials(bottle, materialById) {
   return bottle.input.items.map((item) => materialById[item.materialId]?.name ?? item.materialId).join("・");
@@ -84,10 +91,10 @@ function orderCard(order, state) {
 function ingredientPanel(state, materialById) {
   const inventory = Object.entries(state.economy?.inventory ?? {})
     .filter(([, count]) => count > 0)
-    .map(([id, count]) => ({ id, count, material: materialById[id] }))
+    .map(([id, count]) => ({ id, count, material: materialById[id], rarity: MATERIAL_MARKET[id]?.rarity ?? "common" }))
     .filter(({ material }) => Boolean(material));
   const controls = inventory.length
-    ? inventory.map(({ id, count, material }) => `<button data-action="add-ingredient" data-id="${escapeHtml(id)}">${materialArt(material, "ingredient-art")}<span>${escapeHtml(material.name)}を釜へ入れる <small>×${count}</small></span></button>`).join("")
+    ? inventory.map(({ id, count, material, rarity }) => `<button class="rarity-frame rarity-${rarityClass(rarity)}" data-action="add-ingredient" data-id="${escapeHtml(id)}">${materialArt(material, "ingredient-art")}<span>${escapeHtml(material.name)}を釜へ入れる <small>${rarityBadge(rarity)} ×${count}</small></span></button>`).join("")
     : "<p class=\"muted\">手持ちの素材がない。夜市で仕入れよう。</p>";
   return panel("所持素材", `
     <p class="muted">瓶を釜へドラッグして注ぐか、この所持品から確実に投入できる。</p>
@@ -123,11 +130,11 @@ const MARKET_REASON = Object.freeze({
 function marketPanel(market) {
   const assetCards = market.assets.map((asset) => {
     const status = asset.owned ? "購入済み" : asset.canBuy.ok ? "購入できる" : MARKET_REASON[asset.canBuy.reason];
-    return `<li class="market-card"><div><b>${escapeHtml(asset.name)}</b><small>Tier ${asset.tier} · ${asset.price} 月貨</small></div><button data-action="buy-asset" data-id="${escapeHtml(asset.id)}" ${asset.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
+    return `<li class="market-card rarity-frame rarity-${rarityClass(asset.rarity)}"><div><b>${escapeHtml(asset.name)}</b><small>${rarityBadge(asset.rarity)} Tier ${asset.tier} · ${asset.price} 月貨</small></div><button data-action="buy-asset" data-id="${escapeHtml(asset.id)}" ${asset.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
   }).join("");
   const materialCards = market.materials.map((material) => {
     const status = material.canBuy.ok ? "1個購入" : MARKET_REASON[material.canBuy.reason];
-    return `<li class="market-card material-market-card">${materialArt(material)}<div><b>${escapeHtml(material.name)}</b><small>${material.rarity} · 所持 ${material.count} · ${material.price} 月貨</small></div><button data-action="buy-material" data-id="${escapeHtml(material.id)}" ${material.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
+    return `<li class="market-card material-market-card rarity-frame rarity-${rarityClass(material.rarity)}">${materialArt(material)}<div><b>${escapeHtml(material.name)}</b><small>${rarityBadge(material.rarity)} 所持 ${material.count} · ${material.price} 月貨</small></div><button data-action="buy-material" data-id="${escapeHtml(material.id)}" ${material.canBuy.ok ? "" : "disabled"}>${escapeHtml(status)}</button></li>`;
   }).join("");
   const next = market.rank.next
     ? `次の棚: 所有 ${market.rank.next.ownedCount} 点${market.rank.next.tierTwoCount ? `（Tier 2を${market.rank.next.tierTwoCount}点含む）` : ""}`

@@ -2,7 +2,20 @@ import { MATERIAL_BY_ID, SIDE_EFFECT_BY_ID } from "./data.js";
 
 export const RARITY_ORDER = Object.freeze(["common", "uncommon", "rare"]);
 
-const asset = (id, name, tier, price, kind = "dressing") => Object.freeze({ id, name, tier, price, kind });
+export function rarityForAssetTier(tier) {
+  if (tier >= 3) return "rare";
+  if (tier >= 2) return "uncommon";
+  return "common";
+}
+
+const asset = (id, name, tier, price, kind = "dressing") => Object.freeze({
+  id,
+  name,
+  tier,
+  rarity: rarityForAssetTier(tier),
+  price,
+  kind,
+});
 
 /** Every importable workshop GLB has one stable marketplace identity. */
 export const ASSET_CATALOG = Object.freeze([
