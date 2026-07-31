@@ -5,6 +5,7 @@ import { clearGame, freshGameState, loadGame, saveGame } from "./save.js";
 import { createWorkshopScene } from "./scene.js";
 import { createInteractions } from "./interactions.js";
 import { createLayoutEditor } from "./layout-editor.js";
+import { getSimmerSettings } from "./simmer.js";
 import { createUI } from "./ui.js";
 
 const canvas = document.getElementById("workshop-canvas");
@@ -12,7 +13,6 @@ const root = document.getElementById("ui-root");
 const bootError = document.getElementById("boot-error");
 // Read once: this mode is intentionally selected only during page boot.
 const layoutMode = new URLSearchParams(window.location.search).get("layout") === "1";
-const SIMMER_TARGET_SECONDS = Object.freeze({ low: 5, mid: 3.5, high: 2.5 });
 const defaultTechnique = () => ({ stirQuality: 50, simmer: "none" });
 const effectivePourBand = (material, gentleTechnique) => {
   const band = material.pourBand;
@@ -305,12 +305,11 @@ function startWorkshop() {
     onPourGauge: (pour) => ui.setInteraction({ pour }),
     getSimmerSettings: () => {
       if (state.phase !== "CRAFT" || state.brew.items.length === 0) return null;
-      const windowMultiplier = state.settings.gentleTechnique ? 1.5 : 1;
-      return {
-        targetSeconds: SIMMER_TARGET_SECONDS[state.brew.tempBand],
-        perfectWindow: 0.4 * windowMultiplier,
-        goodWindow: 1 * windowMultiplier,
-      };
+      return getSimmerSettings({
+        orderIndex: state.orderIndex,
+        tempBand: state.brew.tempBand,
+        gentleTechnique: state.settings.gentleTechnique,
+      });
     },
     onSimmerProgress: (simmer) => ui.setInteraction({ simmer: simmer.active ? simmer : null }),
     onSimmerEnd: ({ result }) => {
