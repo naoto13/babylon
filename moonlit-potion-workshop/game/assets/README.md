@@ -21,6 +21,17 @@
 
 ## 作成の目安
 
+現行の全アセットは `assets/refs/*-ref.png` を入力に、ローカルの TRELLIS.2（ComfyUI, FP8 量子化）で生成しています。
+
+```sh
+python tools/trellis2/comfy_generate.py --out-dir out --name mortar --image moonlit-potion-workshop/assets/refs/mortar-ref.png
+python tools/trellis2/pack_for_game.py --src out --install
+```
+
+`comfy_generate.py` は `tools/trellis2/run_comfyui.sh` で起動した ComfyUI（127.0.0.1:8188）へ API で投げます。`--name`/`--image` を並べるとモデルを常駐させたまま連続生成しますが、12GB の VRAM ではデコード時のピークで OOM しやすいので、6 点程度ずつに区切って `/free` を挟んでください。籠のように形状が密で落ち続ける対象は `--no-cascade`（1024 へのカスケードを外して 512 のままデコード）で通せます。
+
+`pack_for_game.py` が `gltfpack` で配信予算まで詰め、`models/` へ入れます。接写・操作対象は 1024²、飾りは 512² のテクスチャです。
+
 Meshy または Tripo の Image to 3D を使う場合は、PBR をオン、テクスチャは 1K–2K、可能ならクアッド化またはリメッシュを有効にしてください。釜は上面を開け、液面が見える形にします。
 
 ゲームディレクトリ（`game/`）から釜の参照画像は `../assets/refs/cauldron-ref-*.png` です。この README からは `../../assets/refs/cauldron-ref-*.png` になります。
@@ -38,6 +49,8 @@ pnpm dlx gltfpack -i input.glb -o output.glb
 - `cauldron.glb`: **3MB 以下**
 - 8 つの小プロップ: **各 1MB 以下**
 - `models/` フォルダ全体: **10MB 以下**
+
+実測は 25MB で、フォルダ全体の予算には届いていません（TRELLIS.2 差し替え前は 42MB）。飾りを 256² まで落とせば 13MB 程度になりますが、一人称の近接表示では劣化が見えます。`dress-herb-bundle` と `heat-dial` は細い部品が多く、誤差 2% 以内ではこれ以上簡約できないため 1MB をわずかに超えています。
 
 ```sh
 ls -lh game/assets/models
