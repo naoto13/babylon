@@ -1,4 +1,11 @@
 import "@babylonjs/loaders/glTF/2.0/glTFLoader.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_mesh_quantization.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_meshopt_compression.js";
+import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_texture_webp.js";
+// gltfpack は UV を量子化する代わりに KHR_texture_transform でスケールを補正する。
+// この拡張は extensionsRequired には入らないため、未登録だとローダーがエラーを出さず
+// 黙って無視し、テクスチャのサンプリング位置だけがずれて別モデルのように見える。
+import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_texture_transform.js";
 
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
@@ -30,15 +37,19 @@ import { TexturedEffectController } from "./textured-effects.js";
 import {
   ARENA_RADIUS,
   INITIAL_ENEMY_COUNT,
+  LIGHTNING_STRIKE_CONFIG,
   RUN_DURATION_SECONDS,
   UPGRADES,
   applyUpgrade,
+  canEnemyCastLightning,
   calculateRunRank,
   clampPointToCircle,
   findNearestTarget,
   formatRemainingTime,
   getEnemyCombatStats,
+  getLightningStrikeCooldown,
   getSpawnInterval,
+  isWithinLineSegmentRadius,
   isWithinHorizontalRadius,
   predictFuturePosition,
   shouldSpawnBoss
@@ -97,6 +108,7 @@ const visualPreviewEffect = visualTestMode ? new URLSearchParams(window.location
 const visualAutoStart = visualTestMode && new URLSearchParams(window.location.search).has("auto-start");
 const visualPreviewSwarm = visualTestMode ? Number(new URLSearchParams(window.location.search).get("swarm")) : 0;
 const visualPreviewCrowded = visualTestMode && new URLSearchParams(window.location.search).has("crowded");
+const visualPreviewLightning = visualTestMode ? new URLSearchParams(window.location.search).get("lightning-preview") : null;
 const keyState = new Set();
 const gamepadButtonState = new Map();
 const enemies = [];
@@ -110,11 +122,19 @@ const effectPools = {
   impacts: [],
   erasures: [],
   enemyProjectiles: [],
+  // 通常弾は形態ごとに専用枠を持つ。発射時のメッシュ生成を避け、低品質時も形態別に上限を落とせる。
+  enemyProjectileForms: {
+    crystal: [],
+    flame: [],
+    voidRift: [],
+    shadowBlade: []
+  },
   elementalImpacts: [],
   enemyTelegraphs: [],
   enemyMuzzles: [],
   enemyMelee: [],
   enemyDissipations: [],
+  lightningStrikes: [],
   chronoSlashes: [],
   chronoRifts: [],
   chronoStopFields: [],
@@ -165,22 +185,47 @@ const effectQuality = {
   chronoRiftEchoes: 4,
   chronoTrailEchoes: 7,
   playerProjectileSlots: 12,
+  enemyProjectileTrailScale: 1,
+  enemyProjectileGroundGlow: 0.74,
+  enemyProjectilePoolLimits: { crystal: 10, flame: 6, voidRift: 4, shadowBlade: 4 },
   enemyMuzzleRays: 3,
   enemyMeleeLayers: 2,
-  enemyDissipationSparks: 3
+  enemyDissipationSparks: 3,
+  lightningStrikeBranches: 6
 };
+
+const LIGHTNING_STRIKE_VISUAL = Object.freeze({
+  telegraphOuterWidth: 0.82,
+  telegraphCoreWidth: LIGHTNING_STRIKE_CONFIG.width,
+  // 発動のビームは予兆より太くする。0.76/0.28 では予兆(0.82/0.5)より細く、
+  // 走った瞬間が細い光の筋にしか見えなかった（実機で確認）。
+  beamOuterWidth: 1.15,
+  beamCoreWidth: 0.42,
+  telegraphOuterY: 0.036,
+  telegraphCoreY: 0.052,
+  beamOuterY: 0.11,
+  beamCoreY: 0.126,
+  branchCount: 8
+});
 
 const assetPaths = Object.freeze({
   arena: new URL("../assets/production/arena-clockwork.png", import.meta.url).href,
   environment: new URL("../assets/production/env/arena-clockwork-ibl.hdr", import.meta.url).href,
-  // ねんどろいど風デフォルメ版（三面図 → SPAR3D → リメッシュ → 16骨リグ → アニメーション）。
+  // ねんどろいど風デフォルメ版（三面図 → 画像→3D → リメッシュ → 16骨リグ → アニメーション）。
   // 制作手順は docs/character-asset-pipeline.html を参照。
-  // 旧モデル（assets/production/models/*.glb）はロールバック用に残してある。
-  heroModel: new URL("../assets/production/demonic/animated/hero-nendo-animated.glb", import.meta.url).href,
-  chaserModel: new URL("../assets/production/demonic/animated/chaser-nendo-animated.glb", import.meta.url).href,
-  shooterModel: new URL("../assets/production/demonic/animated/shooter-nendo-animated.glb", import.meta.url).href,
-  thiefModel: new URL("../assets/production/demonic/animated/thief-nendo-animated.glb", import.meta.url).href,
-  bossModel: new URL("../assets/production/demonic/animated/boss-nendo-animated.glb", import.meta.url).href,
+  // 旧モデル（enemy-*-concept.glb / chrono-duelist-custom.glb）はロールバック用に残してある。
+  //
+  // 5体すべて画像→3DをTRELLIS.2に差し替えた高精細版。SPAR3D版（demonic/animated/
+  // *-nendo-animated.glb）もロールバック用に残してある。
+  //
+  // TRELLIS.2版はテクスチャ解像度が高く非圧縮では §12 の予算（主人公 約3.2MB、
+  // 敵 1.5MB）を超えるため、gltfpack で圧縮した models/ 側を読む。圧縮すると
+  // glTF 拡張が増えるので、読み込み側の import 追加も必要になる（冒頭を参照）。
+  heroModel: new URL("../assets/production/models/hero-nendo-trellis2.glb", import.meta.url).href,
+  chaserModel: new URL("../assets/production/models/chaser-nendo-trellis2.glb", import.meta.url).href,
+  shooterModel: new URL("../assets/production/models/shooter-nendo-trellis2.glb", import.meta.url).href,
+  thiefModel: new URL("../assets/production/models/thief-nendo-trellis2.glb", import.meta.url).href,
+  bossModel: new URL("../assets/production/models/boss-nendo-trellis2.glb", import.meta.url).href,
   // 演出用は1回だけロードして、ParticleSystem と固定板プールで共有する。
   flameSheet: new URL("../assets/production/effects/flame-sheet.png", import.meta.url).href,
   smokeSheet: new URL("../assets/production/effects/smoke-sheet.png", import.meta.url).href,
@@ -232,8 +277,14 @@ function getEffectColor(colorHex) {
   return effectColorCache.get(colorHex);
 }
 
+// 演出時間の倍率。撮影で一瞬の演出を捉えるため visual-test では既定60倍に延ばすが、
+// ?slow=1 のように指定すれば実際の見え方（等倍）で確認できる。
+const visualSlowFactor = visualTestMode
+  ? Math.max(1, Number(new URLSearchParams(window.location.search).get("slow") ?? 60))
+  : 1;
+
 function getEffectDuration(duration) {
-  return visualTestMode ? duration * 60 : duration;
+  return duration * visualSlowFactor;
 }
 
 function createMaterial(name, diffuseHex, emissiveHex = diffuseHex, emissiveStrength = 0.18) {
@@ -450,9 +501,9 @@ function createPlayer() {
 
   const modelAnchor = new TransformNode("player-model-anchor", scene);
   modelAnchor.parent = root;
-  // ねんどろいど版は身長 1.8m に正規化済み。旧モデル（bbox 高さ 2.58 × 1.32）と
-  // 同じ見かけの大きさになるよう検証ページで合わせた値。
-  modelAnchor.scaling.setAll(1.9);
+  // ねんどろいど版は身長 1.8m に正規化済み。1.9 だと頭の大きい体型のぶん画面占有が
+  // 過大で、中央のリングをはみ出した。実機で 1.9 / 1.65 / 1.45 を比べて 1.65 を採用。
+  modelAnchor.scaling.setAll(1.65);
   modelAnchor.rotation.y = Math.PI;
 
   const heroContainer = modelContainers.get("hero");
@@ -570,6 +621,11 @@ function initScene() {
   });
   initEffectPools();
   applyQuality(qualitySelect.value);
+  // 開発時の演出確認用。カメラを引く・特定の状態を作るといった操作を
+  // ブラウザのコンソールから行えるようにする。本番ビルドでは露出しない。
+  if (visualTestMode) {
+    window.__game = { get scene() { return scene; }, get engine() { return engine; }, get camera() { return camera; }, get player() { return player; }, get enemies() { return enemies; } };
+  }
   return scene;
 }
 
@@ -633,6 +689,7 @@ function resetRun() {
   disposeCollection(enemyProjectiles);
   disposeCollection(effects);
   resetPooledEffects();
+  resetLightningStrikePool();
   texturedEffects?.reset();
 
   run = {
@@ -684,7 +741,10 @@ function startRun() {
   resetRun();
   setPhase("playing");
   // DEVの撮影URLだけで、実際の敵更新経路へ近距離の一体を置く。通常ランの敵配置・難度には影響しない。
-  if (visualPreviewEnemy) {
+  if (visualPreviewLightning) {
+    disposeCollection(enemies);
+    spawnVisualLightningPreview(visualPreviewLightning);
+  } else if (visualPreviewEnemy) {
     disposeCollection(enemies);
     spawnVisualEnemyPreview(visualPreviewEnemy);
   }
@@ -794,6 +854,10 @@ function spawnEnemy(type = "chaser", fixedAngle = null, fixedRadius = 15.3) {
     contactCooldown: 0,
     shootCooldown: type === "boss" ? 0.65 : 0.8 + Math.random() * 1.1,
     attackTelegraphActive: false,
+    // shooterの一部だけとbossだけが所持する。通常弾のcooldownとは完全に分離する。
+    lightningCapable: canEnemyCastLightning(type),
+    lightningCooldown: Number.POSITIVE_INFINITY,
+    lightningStrikeActive: false,
     phase: Math.random() * Math.PI * 2,
     baseY,
     baseScale: mesh.metadata.scale,
@@ -802,6 +866,7 @@ function spawnEnemy(type = "chaser", fixedAngle = null, fixedRadius = 15.3) {
     velocityX: 0,
     velocityZ: 0
   };
+  if (enemy.lightningCapable) enemy.lightningCooldown = getLightningStrikeCooldown();
   nextEnemyId += 1;
   enemies.push(enemy);
   playEnemyAnimation(enemy, "Move", { speedRatio: type === "boss" ? 0.78 : 1 + speed * 0.06 });
@@ -835,6 +900,25 @@ function spawnVisualEnemyPreview(type) {
   // visual-testでは生存固定を外し、衝突時の衝撃波まで実機画面で確認する。
   run.invulnerable = 0;
   return { id: enemy.id, type };
+}
+
+function spawnVisualLightningPreview(type = "shooter") {
+  if (phase !== "playing" || !["shooter", "boss"].includes(type)) return false;
+  const enemy = spawnEnemy(type, 0, type === "boss" ? 6.8 : 6.1);
+  if (!enemy) return false;
+  enemy.speed = 0;
+  enemy.hp = 999;
+  enemy.maxHp = 999;
+  enemy.mesh.position.set(player.position.x, enemy.baseY, player.position.z + (type === "boss" ? 6.8 : 6.1));
+  enemy.x = enemy.mesh.position.x;
+  enemy.z = enemy.mesh.position.z;
+  enemy.shootCooldown = Number.POSITIVE_INFINITY;
+  enemy.lightningCapable = true;
+  enemy.lightningCooldown = 0;
+  run.spawnClock = Number.POSITIVE_INFINITY;
+  run.attackClock = Number.POSITIVE_INFINITY;
+  // 開発時だけ、実ゲームと同じ攻撃を直ちに開始して予兆・発動の両方を撮影できるようにする。
+  return Boolean(spawnEnemyLightningStrike(enemy));
 }
 
 function spawnVisualSwarm(count = 12) {
@@ -879,6 +963,180 @@ function createEffectMaterial(name, colorHex, alpha = 0.9, emissiveStrength = 1)
   material.backFaceCulling = false;
   material.metadata = { effectBaseAlpha: alpha };
   return material;
+}
+
+function createLightningStrikeTextureMaterial(name, colorHex, alpha) {
+  const material = new StandardMaterial(name, scene);
+  // lightning-arc.png はここでも共有し、縦の絵を床上の攻撃方向へ回転・伸縮させる。
+  const texture = texturedEffects.textures.lightningArc;
+  material.diffuseTexture = texture;
+  material.emissiveTexture = texture;
+  material.diffuseColor = Color3.FromHexString(colorHex);
+  material.emissiveColor = Color3.FromHexString(colorHex).scale(1.32);
+  material.specularColor = Color3.Black();
+  material.alpha = alpha;
+  material.useAlphaFromDiffuseTexture = true;
+  material.disableLighting = true;
+  material.backFaceCulling = false;
+  material.metadata = { effectBaseAlpha: alpha };
+  return material;
+}
+
+function createLightningStrikePoolSlot(index) {
+  const root = new TransformNode(`lightning-strike-pool-${index}`, scene);
+  const telegraphOuterMaterial = createEffectMaterial(`lightning-strike-telegraph-outer-${index}`, "#ef4444", 0.42, 1.18);
+  const telegraphCoreMaterial = createEffectMaterial(`lightning-strike-telegraph-core-${index}`, "#ffb4b4", 0.8, 1.36);
+  const outerMaterial = createLightningStrikeTextureMaterial(`lightning-strike-outer-${index}`, "#a855f7", 0.94);
+  const coreMaterial = createLightningStrikeTextureMaterial(`lightning-strike-core-${index}`, "#ffffff", 0.98);
+  const telegraphOuter = CreatePlane(`lightning-strike-telegraph-outer-${index}`, { width: 1, height: 1 }, scene);
+  const telegraphCore = CreatePlane(`lightning-strike-telegraph-core-${index}`, { width: 1, height: 1 }, scene);
+  const beamOuter = CreatePlane(`lightning-strike-beam-outer-${index}`, { width: 1, height: 1 }, scene);
+  const beamCore = CreatePlane(`lightning-strike-beam-core-${index}`, { width: 1, height: 1 }, scene);
+  const lineMeshes = [telegraphOuter, telegraphCore, beamOuter, beamCore];
+  for (const mesh of lineMeshes) {
+    mesh.parent = root;
+    mesh.rotation.x = Math.PI / 2;
+    mesh.isPickable = false;
+  }
+  telegraphOuter.material = telegraphOuterMaterial;
+  telegraphCore.material = telegraphCoreMaterial;
+  beamOuter.material = outerMaterial;
+  beamCore.material = coreMaterial;
+
+  const branches = [];
+  for (let branchIndex = 0; branchIndex < LIGHTNING_STRIKE_VISUAL.branchCount; branchIndex += 1) {
+    const branch = CreateBox(
+      `lightning-strike-branch-${index}-${branchIndex}`,
+      { width: 0.055, height: 0.05, depth: 0.72 },
+      scene
+    );
+    branch.parent = root;
+    branch.material = branchIndex % 3 === 0 ? coreMaterial : outerMaterial;
+    branch.isPickable = false;
+    branches.push({
+      mesh: branch,
+      along: 0.16 + ((branchIndex * 0.173) % 0.7),
+      side: branchIndex % 2 === 0 ? -1 : 1,
+      rotation: 0.42 + (branchIndex % 3) * 0.12,
+      scale: 0.34 + (branchIndex % 4) * 0.08
+    });
+  }
+
+  const slot = {
+    root,
+    telegraphOuter,
+    telegraphCore,
+    beamOuter,
+    beamCore,
+    telegraphOuterMaterial,
+    telegraphCoreMaterial,
+    outerMaterial,
+    coreMaterial,
+    branches,
+    source: null,
+    start: new Vector3(),
+    end: new Vector3(),
+    direction: new Vector3(),
+    phase: "idle",
+    age: 0,
+    alive: false,
+    setLine(mesh, width, length, height) {
+      mesh.position.set(0, height, length * 0.5);
+      mesh.scaling.set(width, Math.max(0.001, length), 1);
+    },
+    activate(enemy, direction) {
+      this.source = enemy;
+      this.direction.copyFrom(direction);
+      this.start.set(enemy.mesh.position.x, 0, enemy.mesh.position.z);
+      this.end.copyFrom(direction).scaleInPlace(LIGHTNING_STRIKE_CONFIG.length).addInPlace(this.start);
+      this.root.position.copyFrom(this.start);
+      this.root.rotation.set(0, Math.atan2(direction.x, direction.z), 0);
+      this.phase = "telegraph";
+      this.age = 0;
+      this.alive = true;
+      this.setLine(
+        this.telegraphOuter,
+        LIGHTNING_STRIKE_VISUAL.telegraphOuterWidth,
+        LIGHTNING_STRIKE_CONFIG.length,
+        LIGHTNING_STRIKE_VISUAL.telegraphOuterY
+      );
+      this.setLine(
+        this.telegraphCore,
+        LIGHTNING_STRIKE_VISUAL.telegraphCoreWidth,
+        LIGHTNING_STRIKE_CONFIG.length,
+        LIGHTNING_STRIKE_VISUAL.telegraphCoreY
+      );
+      this.telegraphOuter.setEnabled(true);
+      this.telegraphCore.setEnabled(true);
+      this.beamOuter.setEnabled(false);
+      this.beamCore.setEnabled(false);
+      this.updateTelegraph(0);
+      this.applyQuality();
+      this.root.setEnabled(true);
+    },
+    updateTelegraph(progress) {
+      // 予兆は時間とともに赤く明るくし、発動直前が最も明瞭になる。
+      const charge = 0.24 + (1 - (1 - progress) ** 3) * 0.76;
+      this.telegraphOuter.visibility = 0.34 + charge * 0.44;
+      this.telegraphCore.visibility = 0.38 + charge * 0.58;
+      this.telegraphOuterMaterial.alpha = this.telegraphOuterMaterial.metadata.effectBaseAlpha * (0.42 + charge * 0.58);
+      this.telegraphCoreMaterial.alpha = this.telegraphCoreMaterial.metadata.effectBaseAlpha * (0.48 + charge * 0.52);
+    },
+    beginStrike() {
+      this.phase = "strike";
+      this.age = 0;
+      this.telegraphOuter.setEnabled(false);
+      this.telegraphCore.setEnabled(false);
+      this.beamOuter.setEnabled(true);
+      this.beamCore.setEnabled(true);
+      this.applyQuality();
+      this.updateStrike(0);
+    },
+    updateStrike(age) {
+      const travelProgress = prefersReducedMotion
+        ? 1
+        : Math.min(1, age / LIGHTNING_STRIKE_CONFIG.travelSeconds);
+      const visibleLength = LIGHTNING_STRIKE_CONFIG.length * travelProgress;
+      const fadeProgress = Math.max(0, (age - LIGHTNING_STRIKE_CONFIG.travelSeconds) / LIGHTNING_STRIKE_CONFIG.lingerSeconds);
+      const fade = (1 - Math.min(1, fadeProgress)) ** 1.45;
+      this.setLine(this.beamOuter, LIGHTNING_STRIKE_VISUAL.beamOuterWidth, visibleLength, LIGHTNING_STRIKE_VISUAL.beamOuterY);
+      this.setLine(this.beamCore, LIGHTNING_STRIKE_VISUAL.beamCoreWidth, visibleLength, LIGHTNING_STRIKE_VISUAL.beamCoreY);
+      this.beamOuter.visibility = 0.95 * fade;
+      this.beamCore.visibility = 1 * fade;
+      this.outerMaterial.alpha = this.outerMaterial.metadata.effectBaseAlpha * fade;
+      this.coreMaterial.alpha = this.coreMaterial.metadata.effectBaseAlpha * fade;
+      const branchLimit = prefersReducedMotion ? 1 : effectQuality.lightningStrikeBranches;
+      for (const [branchIndex, branch] of this.branches.entries()) {
+        const enabled = branchIndex < branchLimit && branch.along <= travelProgress && fade > 0.02;
+        branch.mesh.setEnabled(enabled);
+        if (!enabled) continue;
+        branch.mesh.position.set(
+          branch.side * (0.2 + (branchIndex % 3) * 0.045),
+          LIGHTNING_STRIKE_VISUAL.beamOuterY + 0.025,
+          LIGHTNING_STRIKE_CONFIG.length * branch.along
+        );
+        branch.mesh.rotation.set(0, branch.side * branch.rotation, 0);
+        branch.mesh.scaling.set(1, 1, branch.scale * (0.72 + fade * 0.56));
+      }
+    },
+    applyQuality() {
+      const branchLimit = prefersReducedMotion ? 1 : effectQuality.lightningStrikeBranches;
+      this.branches.forEach((branch, branchIndex) => {
+        branch.mesh.setEnabled(this.alive && this.phase === "strike" && branchIndex < branchLimit);
+      });
+    },
+    deactivate() {
+      if (this.source) this.source.lightningStrikeActive = false;
+      this.source = null;
+      this.phase = "idle";
+      this.age = 0;
+      this.alive = false;
+      this.root.setEnabled(false);
+      this.branches.forEach((branch) => branch.mesh.setEnabled(false));
+    }
+  };
+  root.setEnabled(false);
+  effectPools.lightningStrikes.push(slot);
 }
 
 function trackEffect(
@@ -1115,127 +1373,175 @@ function createEnemyProjectileMaterials() {
       shell: createEffectMaterial(`element-${element}-shot-shell`, palette.primary, element === "void" ? 0.44 : 0.34, 1.04),
       trail: createEffectMaterial(`element-${element}-shot-trail`, palette.deep, 0.58, 0.94),
       ring: createEffectMaterial(`element-${element}-shot-ring`, palette.accent, 0.84, 1.16),
-      shadow: createEffectMaterial(`element-${element}-shot-shadow`, palette.deep, element === "void" ? 0.48 : 0.26, 0.2)
+      shadow: createEffectMaterial(`element-${element}-shot-shadow`, palette.deep, element === "void" ? 0.48 : 0.26, 0.2),
+      ground: createEffectMaterial(`element-${element}-shot-ground`, palette.primary, 0.36, 0.76)
     });
   }
+  // shooter / thief は属性色とは別に、敵種を即座に識別できる指定色を共有する。
+  enemyProjectileMaterials.set("crystal", {
+    core: createEffectMaterial("crystal-shot-core", "#ffffff", 0.98, 1.52),
+    shell: createEffectMaterial("crystal-shot-shell", "#d946ef", 0.88, 1.18),
+    trail: createEffectMaterial("crystal-shot-trail", "#7a1a9d", 0.62, 0.98),
+    ring: createEffectMaterial("crystal-shot-ring", "#f5d0fe", 0.84, 1.16),
+    shadow: createEffectMaterial("crystal-shot-shadow", "#2e0938", 0.28, 0.22),
+    ground: createEffectMaterial("crystal-shot-ground", "#d946ef", 0.38, 0.8)
+  });
+  enemyProjectileMaterials.set("shadowBlade", {
+    core: createEffectMaterial("shadow-blade-core", "#f5d0fe", 0.94, 1.34),
+    shell: createEffectMaterial("shadow-blade-shell", "#c026d3", 0.9, 1.18),
+    trail: createEffectMaterial("shadow-blade-outline", "#17051e", 0.82, 0.72),
+    ring: createEffectMaterial("shadow-blade-accent", "#e879f9", 0.76, 1.06),
+    shadow: createEffectMaterial("shadow-blade-shadow", "#120316", 0.34, 0.2),
+    ground: createEffectMaterial("shadow-blade-ground", "#c026d3", 0.34, 0.66)
+  });
 }
 
-function createEnemyProjectilePoolSlot(index) {
-  const root = new TransformNode(`enemy-projectile-pool-${index}`, scene);
-  const core = CreateSphere(`enemy-projectile-core-${index}`, { diameter: 0.34, segments: 8 }, scene);
-  const shell = CreateSphere(`enemy-projectile-shell-${index}`, { diameter: 0.66, segments: 8 }, scene);
-  const ring = CreateTorus(
-    `enemy-projectile-ring-${index}`,
-    { diameter: 0.7, thickness: 0.044, tessellation: 12 },
-    scene
-  );
-  const trail = CreateBox(`enemy-projectile-trail-${index}`, { width: 0.16, height: 0.12, depth: 2.1 }, scene);
-  core.parent = root;
-  shell.parent = root;
-  ring.parent = root;
+const enemyProjectilePoolCapacity = Object.freeze({ crystal: 16, flame: 12, voidRift: 6, shadowBlade: 6 });
+const enemyProjectileTrailLength = Object.freeze({ crystal: 5.2, flame: 4.4, voidRift: 5, shadowBlade: 4.1 });
+
+function createEnemyProjectilePoolSlot(form, index) {
+  const root = new TransformNode(`enemy-projectile-${form}-${index}`, scene);
+  const trail = CreateBox(`enemy-projectile-${form}-trail-${index}`, { width: 0.16, height: 0.055, depth: 1 }, scene);
+  const groundGlow = CreateDisc(`enemy-projectile-${form}-ground-glow-${index}`, { radius: 0.46, tessellation: 12 }, scene);
   trail.parent = root;
-  ring.rotation.x = Math.PI / 2;
-  trail.position.z = -1.02;
-  // 属性形状は全て起動時に確保する。発射中は有効化とTransform更新だけで、GCを発生させない。
-  const fireTongues = [];
-  for (let tongueIndex = 0; tongueIndex < 5; tongueIndex += 1) {
-    const tongue = CreateBox(
-      `enemy-fire-tongue-${index}-${tongueIndex}`,
-      { width: 0.12, height: 0.52 - tongueIndex * 0.045, depth: 0.13 },
-      scene
-    );
-    tongue.parent = root;
-    fireTongues.push(tongue);
-  }
-  const lightningSegments = [];
-  for (let segmentIndex = 0; segmentIndex < 5; segmentIndex += 1) {
-    const segment = CreateBox(
-      `enemy-lightning-segment-${index}-${segmentIndex}`,
-      { width: 0.058, height: 0.058, depth: 0.56 },
-      scene
-    );
-    segment.parent = root;
-    lightningSegments.push(segment);
-  }
-  const lightningBranches = [];
-  for (let branchIndex = 0; branchIndex < 3; branchIndex += 1) {
-    const branch = CreateBox(
-      `enemy-lightning-branch-${index}-${branchIndex}`,
-      { width: 0.042, height: 0.042, depth: 0.38 },
-      scene
-    );
-    branch.parent = root;
-    lightningBranches.push(branch);
-  }
-  const voidShards = [];
-  for (let shardIndex = 0; shardIndex < 5; shardIndex += 1) {
-    const shard = CreatePlane(`enemy-void-shard-${index}-${shardIndex}`, { size: 0.46 }, scene);
-    shard.parent = root;
-    voidShards.push(shard);
-  }
-  const voidShadow = CreateDisc(`enemy-void-shadow-${index}`, { radius: 0.68, tessellation: 16 }, scene);
-  voidShadow.rotation.x = Math.PI / 2;
-  voidShadow.position.y = -0.86;
-  voidShadow.parent = root;
-  // 弾本体も属性テクスチャで読ませる。既存の球・箱・トーラスは補助にも使わない。
-  const fireSprite = CreatePlane(`enemy-fire-sprite-${index}`, { size: 1.28 }, scene);
-  fireSprite.parent = root;
-  fireSprite.position.y = 0.42;
-  fireSprite.material = texturedEffects.materials.flame.fire;
-  fireSprite.billboardMode = 7;
-  const fireSpriteState = texturedEffects.createSpriteSheetState(fireSprite);
-  const lightningSprites = [0, 1].map((spriteIndex) => {
-    const sprite = CreatePlane(`enemy-lightning-sprite-${index}-${spriteIndex}`, { size: 1.12 + spriteIndex * 0.16 }, scene);
-    sprite.parent = root;
-    sprite.position.y = 0.62 + spriteIndex * 0.12;
-    sprite.material = texturedEffects.materials.lightning;
-    sprite.billboardMode = 7;
-    return sprite;
-  });
-  const voidSprite = CreatePlane(`enemy-void-swirl-${index}`, { size: 1.36 }, scene);
-  voidSprite.parent = root;
-  voidSprite.position.y = 0.08;
-  voidSprite.rotation.x = Math.PI / 2;
-  voidSprite.material = texturedEffects.materials.swirl;
-  for (const mesh of [
-    core, shell, ring, trail, ...fireTongues, ...lightningSegments, ...lightningBranches, ...voidShards, voidShadow,
-    fireSprite, ...lightningSprites, voidSprite
-  ]) {
+  groundGlow.parent = root;
+  groundGlow.rotation.x = Math.PI / 2;
+  trail.isPickable = false;
+  groundGlow.isPickable = false;
+
+  const addFormMesh = (mesh) => {
+    mesh.parent = root;
     mesh.isPickable = false;
+    return mesh;
+  };
+  let crystalShell;
+  let crystalCore;
+  let flameHead;
+  let flameCore;
+  let fireSprite;
+  let fireSpriteState;
+  const flameTails = [];
+  const voidSwirls = [];
+  const voidSeams = [];
+  let bladeSpin;
+  const shadowOuterBlades = [];
+  const shadowInnerBlades = [];
+
+  if (form === "crystal") {
+    // 6面の外殻と芯を同軸に置き、+Z を弾頭にした細長い結晶の矢にする。
+    crystalShell = addFormMesh(CreateCylinder(`crystal-arrow-shell-${index}`, {
+      height: 1.38, diameterTop: 0.045, diameterBottom: 0.38, tessellation: 6
+    }, scene));
+    crystalCore = addFormMesh(CreateCylinder(`crystal-arrow-core-${index}`, {
+      height: 1.08, diameterTop: 0.025, diameterBottom: 0.16, tessellation: 6
+    }, scene));
+    crystalShell.rotation.x = Math.PI / 2;
+    crystalCore.rotation.x = Math.PI / 2;
+  } else if (form === "flame") {
+    // 砲弾は7面の塊、後方は3本の先細り炎。flame-sheet の板と粒子も同じプールに追従させる。
+    flameHead = addFormMesh(CreateCylinder(`flame-shell-${index}`, {
+      height: 0.9, diameterTop: 0.26, diameterBottom: 0.68, tessellation: 7
+    }, scene));
+    flameCore = addFormMesh(CreateCylinder(`flame-core-${index}`, {
+      height: 0.66, diameterTop: 0.13, diameterBottom: 0.34, tessellation: 6
+    }, scene));
+    flameHead.rotation.x = Math.PI / 2;
+    flameCore.rotation.x = Math.PI / 2;
+    for (let tailIndex = 0; tailIndex < 3; tailIndex += 1) {
+      const tail = addFormMesh(CreateCylinder(`flame-tail-${index}-${tailIndex}`, {
+        height: 3.1 + tailIndex * 0.28, diameterTop: 0.32 - tailIndex * 0.055, diameterBottom: 0.035, tessellation: 6
+      }, scene));
+      tail.rotation.x = Math.PI / 2;
+      tail.position.x = (tailIndex - 1) * 0.13;
+      tail.position.z = -1.7 - tailIndex * 0.18;
+      tail.rotation.z = (tailIndex - 1) * 0.15;
+      flameTails.push(tail);
+    }
+    fireSprite = addFormMesh(CreatePlane(`flame-sheet-${index}`, { size: 1.46 }, scene));
+    fireSprite.position.y = 0.42;
+    fireSprite.material = texturedEffects.materials.flame.fire;
+    fireSprite.billboardMode = 7;
+    fireSpriteState = texturedEffects.createSpriteSheetState(fireSprite);
+  } else if (form === "voidRift") {
+    // swirl.png の二層を地面と平行に置く。これは空中弾ではなく地を滑る裂け目として読ませる。
+    for (let swirlIndex = 0; swirlIndex < 2; swirlIndex += 1) {
+      const swirl = addFormMesh(CreatePlane(`void-rift-swirl-${index}-${swirlIndex}`, { size: swirlIndex === 0 ? 1.42 : 0.92 }, scene));
+      swirl.rotation.x = Math.PI / 2;
+      swirl.material = texturedEffects.materials.swirl;
+      voidSwirls.push(swirl);
+    }
+    for (let seamIndex = 0; seamIndex < 3; seamIndex += 1) {
+      const seam = addFormMesh(CreateBox(`void-rift-seam-${index}-${seamIndex}`, {
+        width: 0.045, height: 0.055, depth: 0.72 + seamIndex * 0.18
+      }, scene));
+      seam.position.x = (seamIndex - 1) * 0.12;
+      seam.rotation.y = (seamIndex - 1) * 0.34;
+      voidSeams.push(seam);
+    }
+  } else {
+    // 4面の平たい菱形を2枚十字に組み、ローカル+Z（飛行方向）を軸に回せる影刃にする。
+    bladeSpin = new TransformNode(`shadow-blade-spin-${index}`, scene);
+    bladeSpin.parent = root;
+    for (let bladeIndex = 0; bladeIndex < 2; bladeIndex += 1) {
+      const outer = CreateCylinder(`shadow-blade-outline-${index}-${bladeIndex}`, {
+        height: 1.18, diameterTop: 0.045, diameterBottom: 0.38, tessellation: 4
+      }, scene);
+      const inner = CreateCylinder(`shadow-blade-core-${index}-${bladeIndex}`, {
+        height: 1.02, diameterTop: 0.025, diameterBottom: 0.19, tessellation: 4
+      }, scene);
+      for (const mesh of [outer, inner]) {
+        mesh.parent = bladeSpin;
+        mesh.rotation.x = Math.PI / 2;
+        mesh.rotation.z = bladeIndex * Math.PI * 0.5;
+        // Cylinder のローカルZを薄くし、回転しても厚みの少ない刃として読ませる。
+        mesh.scaling.z = 0.28;
+        mesh.isPickable = false;
+      }
+      shadowOuterBlades.push(outer);
+      shadowInnerBlades.push(inner);
+    }
   }
 
   const slot = {
     root,
-    core,
-    shell,
-    ring,
+    form,
+    index,
     trail,
-    fireTongues,
-    lightningSegments,
-    lightningBranches,
-    voidShards,
-    voidShadow,
+    groundGlow,
+    crystalShell,
+    crystalCore,
+    flameHead,
+    flameCore,
+    flameTails,
     fireSprite,
     fireSpriteState,
-    lightningSprites,
-    voidSprite,
-    element: "fire",
+    voidSwirls,
+    voidSeams,
+    bladeSpin,
+    shadowOuterBlades,
+    shadowInnerBlades,
     projectile: null,
     alive: false,
     activate(projectile) {
-      const materialSet = enemyProjectileMaterials.get(projectile.element) ?? enemyProjectileMaterials.get("fire");
-      this.element = projectile.element;
-      this.core.material = materialSet.core;
-      this.shell.material = materialSet.shell;
-      this.ring.material = materialSet.ring;
-      this.trail.material = materialSet.trail;
-      this.fireTongues.forEach((tongue, tongueIndex) => (tongue.material = tongueIndex % 2 ? materialSet.core : materialSet.shell));
-      this.lightningSegments.forEach((segment) => (segment.material = materialSet.core));
-      this.lightningBranches.forEach((branch) => (branch.material = materialSet.ring));
-      this.voidShards.forEach((shard, shardIndex) => (shard.material = shardIndex % 2 ? materialSet.shell : materialSet.trail));
-      this.voidShadow.material = materialSet.shadow;
+      const materialKey = this.form === "crystal" ? "crystal" : this.form === "shadowBlade" ? "shadowBlade" : projectile.element;
+      const materialSet = enemyProjectileMaterials.get(materialKey) ?? enemyProjectileMaterials.get("fire");
       this.projectile = projectile;
       this.alive = true;
+      this.trail.material = materialSet.trail;
+      this.groundGlow.material = materialSet.ground;
+      if (this.crystalShell) {
+        this.crystalShell.material = materialSet.shell;
+        this.crystalCore.material = materialSet.core;
+      }
+      if (this.flameHead) {
+        this.flameHead.material = materialSet.shell;
+        this.flameCore.material = materialSet.core;
+        this.flameTails.forEach((tail, tailIndex) => (tail.material = tailIndex === 1 ? materialSet.core : materialSet.trail));
+        texturedEffects?.attachProjectileFlame(projectile);
+      }
+      this.voidSeams.forEach((seam, seamIndex) => (seam.material = seamIndex === 1 ? materialSet.core : materialSet.trail));
+      this.shadowOuterBlades.forEach((blade) => (blade.material = materialSet.trail));
+      this.shadowInnerBlades.forEach((blade) => (blade.material = materialSet.shell));
       this.root.position.copyFrom(projectile.position);
       this.root.rotation.y = Math.atan2(projectile.velocity.x, projectile.velocity.z);
       this.applyQuality();
@@ -1247,87 +1553,69 @@ function createEnemyProjectilePoolSlot(index) {
         return;
       }
       const progress = 1 - this.projectile.life / this.projectile.maxLife;
-      const pulse = prefersReducedMotion ? 1 : 0.92 + Math.sin((progress + index * 0.13) * Math.PI * 8) * 0.08;
-      const size = this.projectile.isBoss ? 1.18 : 1;
-      this.root.position.copyFrom(this.projectile.position);
-      this.root.rotation.y = Math.atan2(this.projectile.velocity.x, this.projectile.velocity.z);
       const motionScale = prefersReducedMotion ? 0.12 : 1;
-      if (this.element === "fire") {
-        // 当たり判定は直進のまま、見た目だけを炎らしく横揺れ・上昇させる。
-        this.root.position.x += Math.sin((progress * 14 + index) * Math.PI) * 0.12 * motionScale;
-        this.root.position.y += 0.1 + Math.sin(progress * Math.PI) * 0.16 * motionScale;
-        this.core.scaling.set(size * 0.82 * pulse, size * 1.6 * pulse, size * 0.82 * pulse);
-        this.shell.scaling.set(size * 1.15, size * 1.72, size * 1.15);
-        this.fireTongues.forEach((tongue, tongueIndex) => {
-          const wave = Math.sin(progress * 18 + tongueIndex * 1.8 + index) * 0.16 * motionScale;
-          tongue.position.set((tongueIndex - 2) * 0.11 + wave, 0.16 + tongueIndex * 0.055, -0.36 - tongueIndex * 0.26);
-          tongue.rotation.z = wave * 1.8;
-          tongue.scaling.y = 0.7 + (1 - progress) * 0.8;
+      const yaw = Math.atan2(this.projectile.velocity.x, this.projectile.velocity.z);
+      this.root.position.copyFrom(this.projectile.position);
+      // すべての弾は速度ベクトルから yaw を再計算し、誘導や拡散後も進行方向へ追従する。
+      this.root.rotation.y = yaw;
+      const trailLength = enemyProjectileTrailLength[this.form] * effectQuality.enemyProjectileTrailScale;
+      this.trail.position.set(0, 0, -trailLength * 0.5);
+      this.trail.scaling.set(1, 1, trailLength);
+      const groundY = -this.projectile.position.y + 0.024;
+      this.groundGlow.position.set(0, groundY, 0);
+      const groundScale = this.form === "flame" ? 1.22 : this.form === "voidRift" ? 1.1 : 0.86;
+      this.groundGlow.scaling.setAll(groundScale * (0.92 + Math.sin(progress * Math.PI) * 0.1));
+      this.groundGlow.visibility = effectQuality.enemyProjectileGroundGlow * (0.82 + Math.sin(progress * Math.PI * 3) * 0.12);
+
+      if (this.form === "crystal") {
+        const spin = deltaSeconds * 1.8 * motionScale;
+        this.crystalShell.rotation.z += spin;
+        this.crystalCore.rotation.z += spin;
+      } else if (this.form === "flame") {
+        this.flameHead.scaling.setAll(1.08 + Math.sin(progress * Math.PI * 8 + this.index) * 0.05 * motionScale);
+        this.flameCore.scaling.setAll(0.92 + Math.sin(progress * Math.PI * 11 + this.index) * 0.07 * motionScale);
+        this.flameTails.forEach((tail, tailIndex) => {
+          tail.rotation.z = (tailIndex - 1) * 0.15 + Math.sin(progress * 18 + tailIndex * 1.7 + this.index) * 0.1 * motionScale;
+          tail.scaling.y = 0.82 + Math.sin(progress * 13 + tailIndex) * 0.12 * motionScale;
         });
-        this.trail.scaling.z = size * (effectQuality.enemyProjectileDetail ? 1.24 : 0.7);
-        this.trail.position.z = -1.14 * this.trail.scaling.z;
-        texturedEffects.setSpriteSheetFrame(this.fireSpriteState, Math.floor((progress * 28 + index * 5) % 64));
-        this.fireSprite.scaling.set(size * (0.88 + pulse * 0.18), size * (1.2 + pulse * 0.46), 1);
-      } else if (this.element === "lightning") {
-        // 折線を複数の板で表現し、枝と点滅を個別に制御する。
-        this.core.scaling.setAll(size * (0.72 + pulse * 0.25));
-        this.shell.scaling.setAll(size * 0.68);
-        this.lightningSegments.forEach((segment, segmentIndex) => {
-          const bend = (segmentIndex % 2 === 0 ? 1 : -1) * (0.16 + Math.sin(progress * 18 + segmentIndex) * 0.045);
-          segment.position.set(bend, (segmentIndex % 2) * 0.06, -0.72 + segmentIndex * 0.38);
-          segment.rotation.y = bend * 1.7;
-          segment.scaling.z = 0.82 + Math.sin(progress * 23 + segmentIndex) * 0.12;
+        texturedEffects.setSpriteSheetFrame(this.fireSpriteState, Math.floor((progress * 28 + this.index * 5) % 64));
+        this.fireSprite.scaling.set(0.92, 1.32 + Math.sin(progress * Math.PI * 8) * 0.1 * motionScale, 1);
+      } else if (this.form === "voidRift") {
+        const riftY = -this.projectile.position.y + 0.052;
+        this.voidSwirls.forEach((swirl, swirlIndex) => {
+          swirl.position.y = riftY + swirlIndex * 0.006;
+          swirl.rotation.y += deltaSeconds * (swirlIndex === 0 ? 4.2 : -6.1) * motionScale;
+          swirl.scaling.setAll(1 - swirlIndex * 0.18 + Math.sin(progress * Math.PI * 5 + swirlIndex) * 0.05);
         });
-        this.lightningBranches.forEach((branch, branchIndex) => {
-          const source = branchIndex === 0 ? 1 : branchIndex === 1 ? 3 : 4;
-          branch.position.copyFrom(this.lightningSegments[source].position);
-          branch.position.x += branchIndex % 2 ? -0.28 : 0.28;
-          branch.rotation.y = branchIndex % 2 ? -0.82 : 0.82;
-        });
-        const flashOn = prefersReducedMotion || Math.sin(progress * 42 + index * 2.7) > -0.28;
-        this.lightningSprites.forEach((sprite, spriteIndex) => {
-          sprite.rotation.z = Math.sin(progress * 24 + spriteIndex * 1.6 + index) * 0.18;
-          sprite.scaling.set(size * (0.8 + spriteIndex * 0.2), size * (1.35 - spriteIndex * 0.12), 1);
-          sprite.setEnabled(this.alive && flashOn);
+        this.voidSeams.forEach((seam, seamIndex) => {
+          seam.position.y = riftY + 0.035 + seamIndex * 0.012;
+          seam.rotation.y = (seamIndex - 1) * 0.34 + Math.sin(progress * 9 + seamIndex) * 0.1 * motionScale;
         });
       } else {
-        // 闇は破片が渦巻きながら中心へ縮み、地面影が進行方向へ長く伸びる。
-        const orbit = 0.42 * (1 - progress * 0.45);
-        this.core.scaling.setAll(size * (0.88 + Math.sin(progress * Math.PI * 5) * 0.08));
-        this.shell.scaling.setAll(size * (1.18 - progress * 0.22));
-        this.voidShards.forEach((shard, shardIndex) => {
-          const angle = progress * 13 * motionScale + shardIndex * ((Math.PI * 2) / this.voidShards.length);
-          const radius = orbit * (1 - progress * 0.7);
-          shard.position.set(Math.cos(angle) * radius, Math.sin(angle * 1.7) * 0.12, Math.sin(angle) * radius);
-          shard.rotation.set(0.35 + shardIndex * 0.22, -angle * 1.6, angle * 0.55);
-          shard.scaling.setAll(0.72 + (1 - progress) * 0.42);
-        });
-        this.voidShadow.scaling.set(0.76 + progress * 0.36, 1, 1.55 + progress * 0.85);
-        this.trail.scaling.z = 0.6;
-        this.voidSprite.scaling.setAll(size * (1.08 - progress * 0.36));
-        this.voidSprite.rotation.y += deltaSeconds * (prefersReducedMotion ? 0.35 : 3.8);
+        // bladeSpin のローカル Z は root の進行方向。高速回転しても弾頭の向きは yaw で保つ。
+        this.bladeSpin.rotation.z += deltaSeconds * 18 * motionScale;
       }
-      this.ring.rotation.z += deltaSeconds * (this.projectile.isBoss ? 8.2 : 10.6) * motionScale;
-      this.ring.rotation.y += deltaSeconds * 4.4 * motionScale;
     },
     applyQuality() {
-      this.core.setEnabled(false);
-      this.shell.setEnabled(false);
-      this.ring.setEnabled(false);
-      this.trail.setEnabled(false);
-      this.fireTongues.forEach((tongue) => tongue.setEnabled(false));
-      this.lightningSegments.forEach((segment) => segment.setEnabled(false));
-      this.lightningBranches.forEach((branch) => branch.setEnabled(false));
-      this.voidShards.forEach((shard) => shard.setEnabled(false));
-      this.voidShadow.setEnabled(false);
-      this.fireSprite.setEnabled(this.alive && this.element === "fire");
-      this.lightningSprites.forEach((sprite) => sprite.setEnabled(this.alive && this.element === "lightning"));
-      this.voidSprite.setEnabled(this.alive && this.element === "void");
+      const detailed = effectQuality.enemyProjectileDetail && !prefersReducedMotion;
+      this.trail.setEnabled(this.alive);
+      this.groundGlow.setEnabled(this.alive);
+      this.crystalShell?.setEnabled(this.alive);
+      this.crystalCore?.setEnabled(this.alive);
+      this.flameHead?.setEnabled(this.alive);
+      this.flameCore?.setEnabled(this.alive);
+      this.flameTails.forEach((tail, tailIndex) => tail.setEnabled(this.alive && (detailed || tailIndex === 1)));
+      this.fireSprite?.setEnabled(this.alive);
+      this.voidSwirls.forEach((swirl, swirlIndex) => swirl.setEnabled(this.alive && (detailed || swirlIndex === 0)));
+      this.voidSeams.forEach((seam, seamIndex) => seam.setEnabled(this.alive && (detailed || seamIndex === 1)));
+      this.shadowOuterBlades.forEach((blade, bladeIndex) => blade.setEnabled(this.alive && (detailed || bladeIndex === 0)));
+      this.shadowInnerBlades.forEach((blade, bladeIndex) => blade.setEnabled(this.alive && (detailed || bladeIndex === 0)));
     }
   };
   root.setEnabled(false);
   pooledEffects.push(slot);
   effectPools.enemyProjectiles.push(slot);
+  effectPools.enemyProjectileForms[form].push(slot);
 }
 
 function createElementalImpactPoolSlot(index) {
@@ -2041,10 +2329,13 @@ function createEnemyDissipationPoolSlot(index) {
 }
 
 function initEffectPools() {
-  // 飛翔体だけは位置追従が必要なので固定メッシュプール。着弾・消滅は共有ParticleSystemへ集約する。
+  // 飛翔体と雷撃は固定プール。通常弾は形態別枠なので、実行中に mesh / ParticleSystem を生成しない。
   createEnemyProjectileMaterials();
-  for (let index = 0; index < 40; index += 1) createEnemyProjectilePoolSlot(index);
+  for (const [form, capacity] of Object.entries(enemyProjectilePoolCapacity)) {
+    for (let index = 0; index < capacity; index += 1) createEnemyProjectilePoolSlot(form, index);
+  }
   for (let index = 0; index < 20; index += 1) createPlayerProjectilePoolSlot(index);
+  for (let index = 0; index < LIGHTNING_STRIKE_CONFIG.poolCapacity; index += 1) createLightningStrikePoolSlot(index);
 }
 
 function getEffectParticleCount(kind) {
@@ -2054,7 +2345,10 @@ function getEffectParticleCount(kind) {
 
 function deactivatePooledEffect(slot) {
   if (!slot) return;
-  if (slot.projectile?.visual === slot) slot.projectile.visual = null;
+  if (slot.projectile?.visual === slot) {
+    texturedEffects?.releaseProjectileFlame(slot.projectile);
+    slot.projectile.visual = null;
+  }
   slot.alive = false;
   slot.projectile = null;
   slot.owner = null;
@@ -2071,12 +2365,35 @@ function resetPooledEffects() {
   for (const slot of pooledEffects) deactivatePooledEffect(slot);
 }
 
+function resetLightningStrikePool() {
+  for (const slot of effectPools.lightningStrikes) slot.deactivate();
+}
+
 function findPooledEffect(pool, limit) {
   return pool.slice(0, limit).find((slot) => !slot.alive) ?? null;
 }
 
+function findLightningStrikeSlot() {
+  // 上限に達している間は新しい雷撃を発動せず、既存の予兆を打ち切らない。
+  return effectPools.lightningStrikes.find((slot) => !slot.alive) ?? null;
+}
+
+function getEnemyProjectileVisualForm(projectile) {
+  if (projectile.type === "shooter") return "crystal";
+  if (projectile.type === "thief") return "shadowBlade";
+  if (projectile.type === "boss" && projectile.element === "void") return "voidRift";
+  return "flame";
+}
+
+function findEnemyProjectileSlot(projectile) {
+  const form = getEnemyProjectileVisualForm(projectile);
+  const pool = effectPools.enemyProjectileForms[form];
+  const limit = effectQuality.enemyProjectilePoolLimits[form] ?? 0;
+  return pool.slice(0, limit).find((slot) => !slot.alive) ?? null;
+}
+
 function spawnEnemyProjectileVisual(projectile) {
-  const slot = findPooledEffect(effectPools.enemyProjectiles, effectQuality.enemyProjectileSlots);
+  const slot = findEnemyProjectileSlot(projectile);
   if (!slot) return;
   projectile.visual = slot;
   slot.activate(projectile);
@@ -2209,9 +2526,14 @@ function configureEffectQuality(quality) {
           chronoRiftEchoes: 1,
           chronoTrailEchoes: 3,
           playerProjectileSlots: 8,
+          // 低品質でも本体比3倍以上の残像を残しつつ、長さ・映り込み・形態別枠を縮小する。
+          enemyProjectileTrailScale: 0.9,
+          enemyProjectileGroundGlow: 0.34,
+          enemyProjectilePoolLimits: { crystal: 8, flame: 4, voidRift: 2, shadowBlade: 2 },
           enemyMuzzleRays: 1,
           enemyMeleeLayers: 1,
-          enemyDissipationSparks: 1
+          enemyDissipationSparks: 1,
+          lightningStrikeBranches: 2
         }
       : quality === "high"
         ? {
@@ -2234,9 +2556,13 @@ function configureEffectQuality(quality) {
             chronoRiftEchoes: 4,
             chronoTrailEchoes: 7,
             playerProjectileSlots: 20,
+            enemyProjectileTrailScale: 1,
+            enemyProjectileGroundGlow: 0.95,
+            enemyProjectilePoolLimits: { crystal: 16, flame: 12, voidRift: 6, shadowBlade: 6 },
             enemyMuzzleRays: 3,
             enemyMeleeLayers: 2,
-            enemyDissipationSparks: 3
+            enemyDissipationSparks: 3,
+            lightningStrikeBranches: LIGHTNING_STRIKE_VISUAL.branchCount
           }
         : {
             impactSlots: 10,
@@ -2258,9 +2584,13 @@ function configureEffectQuality(quality) {
             chronoRiftEchoes: 3,
             chronoTrailEchoes: 5,
             playerProjectileSlots: 12,
+            enemyProjectileTrailScale: 1,
+            enemyProjectileGroundGlow: 0.74,
+            enemyProjectilePoolLimits: { crystal: 10, flame: 6, voidRift: 4, shadowBlade: 4 },
             enemyMuzzleRays: 3,
             enemyMeleeLayers: 2,
-            enemyDissipationSparks: 3
+            enemyDissipationSparks: 3,
+            lightningStrikeBranches: 5
           };
   Object.assign(effectQuality, profile);
   for (const [index, slot] of effectPools.impacts.entries()) {
@@ -2272,7 +2602,6 @@ function configureEffectQuality(quality) {
     else slot.applyQuality();
   }
   const enemyPools = [
-    [effectPools.enemyProjectiles, effectQuality.enemyProjectileSlots],
     [effectPools.elementalImpacts, effectQuality.elementalImpactSlots],
     [effectPools.enemyTelegraphs, effectQuality.enemyTelegraphSlots],
     [effectPools.enemyMuzzles, effectQuality.enemyMuzzleSlots],
@@ -2280,6 +2609,13 @@ function configureEffectQuality(quality) {
     [effectPools.enemyDissipations, effectQuality.enemyDissipationSlots]
   ];
   for (const [pool, limit] of enemyPools) {
+    for (const [index, slot] of pool.entries()) {
+      if (index >= limit) deactivatePooledEffect(slot);
+      else slot.applyQuality();
+    }
+  }
+  for (const [form, pool] of Object.entries(effectPools.enemyProjectileForms)) {
+    const limit = effectQuality.enemyProjectilePoolLimits[form] ?? 0;
     for (const [index, slot] of pool.entries()) {
       if (index >= limit) deactivatePooledEffect(slot);
       else slot.applyQuality();
@@ -2298,6 +2634,7 @@ function configureEffectQuality(quality) {
       else slot.applyQuality();
     }
   }
+  for (const slot of effectPools.lightningStrikes) slot.applyQuality();
 }
 
 function attachClockDial(
@@ -3199,6 +3536,64 @@ function updateEnemyShotTelegraph(enemy, distance, range, worldSpeed) {
   enemy.attackTelegraphActive = true;
 }
 
+function spawnEnemyLightningStrike(enemy) {
+  const slot = findLightningStrikeSlot();
+  if (!slot) return null;
+  const direction = player.position.subtract(enemy.mesh.position);
+  direction.y = 0;
+  if (direction.lengthSquared() < 0.001) return null;
+  direction.normalize();
+  slot.activate(enemy, direction);
+  enemy.lightningStrikeActive = true;
+  enemy.lightningCooldown = getLightningStrikeCooldown();
+  enemy.recoil = Math.max(enemy.recoil, enemy.type === "boss" ? 0.24 : 0.18);
+  playEnemyAnimation(enemy, "Attack", { loop: false, speedRatio: 1.05, lock: 0.38, restart: true });
+  return slot;
+}
+
+function updateEnemyLightningAttack(enemy, distance) {
+  if (
+    !enemy.lightningCapable
+    || enemy.lightningStrikeActive
+    || enemy.lightningCooldown > 0
+    || distance >= LIGHTNING_STRIKE_CONFIG.activationRange
+    || run.freezeRemaining > 0
+  ) return;
+  spawnEnemyLightningStrike(enemy);
+}
+
+function updateLightningStrikes(deltaSeconds, worldSpeed) {
+  for (const slot of effectPools.lightningStrikes) {
+    if (!slot.alive) continue;
+    // 発射者が予兆中に消えた時は、予兆だけを残して不意打ちにならないよう中断する。
+    if (slot.phase === "telegraph" && !slot.source?.alive) {
+      slot.deactivate();
+      continue;
+    }
+    slot.age += deltaSeconds * worldSpeed;
+    if (slot.phase === "telegraph") {
+      const progress = Math.min(1, slot.age / LIGHTNING_STRIKE_CONFIG.telegraphSeconds);
+      slot.updateTelegraph(progress);
+      if (progress < 1) continue;
+
+      slot.beginStrike();
+      // 発動した一度だけ、固定済み線分から自機までの距離で判定する。予兆中の位置は追尾しない。
+      const hitRadius = LIGHTNING_STRIKE_CONFIG.width * 0.5 + LIGHTNING_STRIKE_CONFIG.playerRadius;
+      if (isWithinLineSegmentRadius(player.position, slot.start, slot.end, hitRadius)) {
+        playerHit(LIGHTNING_STRIKE_CONFIG.damage, false, {
+          sourceType: slot.source?.type ?? "shooter",
+          element: "lightning",
+          direction: slot.direction
+        });
+      }
+      continue;
+    }
+
+    slot.updateStrike(slot.age);
+    if (slot.age >= LIGHTNING_STRIKE_CONFIG.travelSeconds + LIGHTNING_STRIKE_CONFIG.lingerSeconds) slot.deactivate();
+  }
+}
+
 function updateEnemies(deltaSeconds) {
   const hourglassSlow = run.stats.hourglass && run.remaining <= 10 ? 0.45 : 1;
   const worldSpeed = run.freezeRemaining > 0 ? 0.035 : hourglassSlow;
@@ -3211,6 +3606,7 @@ function updateEnemies(deltaSeconds) {
     enemy.actionLock = Math.max(0, enemy.actionLock - deltaSeconds * worldSpeed);
     enemy.contactCooldown = Math.max(0, enemy.contactCooldown - deltaSeconds);
     enemy.shootCooldown -= deltaSeconds * worldSpeed;
+    if (enemy.lightningCapable) enemy.lightningCooldown -= deltaSeconds * worldSpeed;
     enemy.phase += deltaSeconds * 2;
     enemy.hitPulse = Math.max(0, enemy.hitPulse - deltaSeconds);
     enemy.recoil = Math.max(0, enemy.recoil - deltaSeconds);
@@ -3245,6 +3641,9 @@ function updateEnemies(deltaSeconds) {
         enemy.shootCooldown = 1.85 + Math.random() * 0.55;
       }
     }
+
+    // 通常弾とは別タイマーで、雷撃を持つ個体だけが稀に予兆を出す。
+    updateEnemyLightningAttack(enemy, distance);
 
     const velocity = movement.scale(enemy.speed * worldSpeed);
     enemy.velocityX = velocity.x;
@@ -3290,6 +3689,7 @@ function updateEnemies(deltaSeconds) {
     }
   }
 
+  updateLightningStrikes(deltaSeconds, worldSpeed);
   run.freezeRemaining = Math.max(0, run.freezeRemaining - deltaSeconds);
 }
 
@@ -3650,6 +4050,7 @@ function installDevHarness() {
           enemyMuzzles: effectPools.enemyMuzzles.filter((slot) => slot.alive).length,
           enemyMelee: effectPools.enemyMelee.filter((slot) => slot.alive).length,
           enemyDissipations: effectPools.enemyDissipations.filter((slot) => slot.alive).length,
+          lightningStrikes: effectPools.lightningStrikes.filter((slot) => slot.alive).length,
           textured: texturedEffects?.getDiagnostics(),
           visualTestMode
         };
@@ -3666,6 +4067,28 @@ function installDevHarness() {
       },
       previewEnemyAttack(type = "shooter") {
         return spawnVisualEnemyPreview(type);
+      },
+      previewLightningAttack(type = "shooter") {
+        if (phase !== "playing") return false;
+        disposeCollection(enemies);
+        resetLightningStrikePool();
+        run.hp = 100;
+        run.invulnerable = 0;
+        return spawnVisualLightningPreview(type);
+      },
+      setPlayerPosition(x = 0, z = 0) {
+        player.position.set(Number(x) || 0, 0, Number(z) || 0);
+        return { x: player.position.x, z: player.position.z };
+      },
+      lightningState() {
+        return effectPools.lightningStrikes.map((slot) => ({
+          active: slot.alive,
+          phase: slot.phase,
+          age: slot.age,
+          sourceType: slot.source?.type ?? null,
+          start: { x: slot.start.x, z: slot.start.z },
+          end: { x: slot.end.x, z: slot.end.z }
+        }));
       },
       previewSwarm(count = 12) {
         return spawnVisualSwarm(count);
