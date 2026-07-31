@@ -42,15 +42,28 @@ function brewSummary(state, materialById, interaction) {
     </div>`;
   })() : "";
   const simmer = interaction.simmer;
-  const simmerLine = simmer?.active ? `<div><span>煮込み</span><strong>${numeric ? `${simmer.elapsed.toFixed(1)} / ${simmer.targetSeconds.toFixed(1)} 秒` : "煮込み中…"}</strong></div>` : "";
+  const simmerMeter = simmer?.active ? (() => {
+    const meterLimit = simmer.targetSeconds + simmer.goodWindow * 1.2;
+    const percent = (value) => Math.min(100, Math.max(0, value / meterLimit * 100));
+    const elapsed = percent(simmer.elapsed);
+    const goodStart = percent(simmer.targetSeconds - simmer.goodWindow);
+    const goodEnd = percent(simmer.targetSeconds + simmer.goodWindow);
+    const perfectStart = percent(simmer.targetSeconds - simmer.perfectWindow);
+    const perfectEnd = percent(simmer.targetSeconds + simmer.perfectWindow);
+    const readout = numeric ? `${simmer.elapsed.toFixed(1)} / ${simmer.targetSeconds.toFixed(1)} 秒` : "黄金の芯で離す";
+    return `<div class="simmer-meter" style="--simmer-value:${elapsed}%;--good-start:${goodStart}%;--good-end:${goodEnd}%;--perfect-start:${perfectStart}%;--perfect-end:${perfectEnd}%" aria-label="火加減メーター。黄金の帯で離すと成功しやすい">
+      <div class="simmer-meter-track" aria-hidden="true"><i class="simmer-good-zone"></i><i class="simmer-perfect-zone"></i><b class="simmer-cursor"></b></div>
+      <div class="simmer-meter-label"><span>火加減の山</span><strong>${readout}</strong></div>
+    </div>`;
+  })() : "";
   const simmerButton = state.phase === "CRAFT"
-    ? "<button type=\"button\" class=\"quiet simmer-button\" data-hold-action=\"simmer\">煮込み（押し続ける）</button>"
+    ? `<button type="button" class="quiet simmer-button ${simmer?.active ? "simmer-active" : ""}" data-hold-action="simmer">${simmer?.active ? "ここで離す" : "煮込みを始める（押し続ける）"}</button>`
     : "";
   return `<aside class="brew-summary" aria-live="polite">
     <p class="eyebrow">いまの調合</p>
     <p class="ingredients">${escapeHtml(names)}</p>
     <div><span>火加減</span><strong>${TEMP_LABELS[state.brew.tempBand]}</strong></div>
-    <div><span>かき混ぜ</span><strong>${laps}</strong></div>${simmerLine}${pourGauge}${warning}${simmerButton}
+    <div><span>かき混ぜ</span><strong>${laps}</strong></div>${simmerMeter}${pourGauge}${warning}${simmerButton}
   </aside>`;
 }
 
