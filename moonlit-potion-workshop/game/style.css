@@ -95,7 +95,11 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .market-card small { color: #bdc8de; }
 .market-card button { flex: 0 0 auto; padding: .38rem .5rem; font-size: .76rem; }
 .ingredient-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.ingredient-actions button { display: inline-flex; align-items: baseline; gap: .35rem; }
+.material-art { display: block; inline-size: 3.2rem; block-size: 3.2rem; flex: 0 0 3.2rem; border: 1px solid rgba(226, 236, 255, .26); border-radius: .62rem; object-fit: cover; box-shadow: 0 .3rem .9rem rgba(0, 0, 0, .26); }
+.material-market-card { min-height: 4.7rem; }
+.material-market-card .material-art { inline-size: 3.6rem; block-size: 3.6rem; flex-basis: 3.6rem; }
+.ingredient-actions button { display: inline-flex; align-items: center; gap: .45rem; text-align: left; }
+.ingredient-actions .ingredient-art { inline-size: 2.15rem; block-size: 2.15rem; flex-basis: 2.15rem; border-radius: .48rem; }
 .ingredient-actions small { color: currentColor; opacity: .74; }
 .toggle-row input { inline-size: 1.15rem; block-size: 1.15rem; accent-color: #efc66e; }
 #boot-error { position: fixed; z-index: 5; inset: auto 1rem 1rem; display: none; max-width: 35rem; padding: .8rem 1rem; border-radius: .8rem; color: #fff3df; background: #572b35; box-shadow: 0 .8rem 2rem rgba(0,0,0,.4); }
