@@ -264,16 +264,33 @@ def create_actions(armature: bpy.types.Object, *, is_hero: bool) -> dict[str, bp
         armature, "Attack", [(1, {}), (5, attack_windup), (10, attack_hit), (15, attack_follow), (21, {})]
     )
 
+    # 頭は全高の4割を占めるので、少しの回転でも首がねじれて見える。
+    # 以前は Head が X-0.34 / Z-0.32 の複合回転で、しかも Neck が同方向に回って
+    # 角度が累積し、頭だけ不自然に傾いていた。頭は後ろへ仰ぐ X 成分だけに絞り、
+    # Neck は Head と逆向きにわずかに戻して累積を打ち消す。
     hit_recoil = {
-        "Hips": {"location": (0.0, 0.040, -0.055), "rotation": (-0.12, 0.0, -0.20), "scale": (1.10, 1.02, 0.91)},
-        "Spine": {"rotation": (0.18, 0.0, 0.15)},
-        "Chest": {"rotation": (0.38, 0.0, 0.34)},
-        "Neck": {"rotation": (-0.14, 0.0, -0.16)},
-        "Head": {"rotation": (-0.34, 0.0, -0.32)},
-        "UpperArm.L": {"rotation": (-0.28, 0.0, 0.40)},
-        "UpperArm.R": {"rotation": (-0.28, 0.0, -0.40)},
+        "Hips": {"location": (0.0, 0.030, -0.050), "rotation": (-0.10, 0.0, -0.06), "scale": (1.08, 1.02, 0.93)},
+        "Spine": {"rotation": (0.16, 0.0, 0.05)},
+        "Chest": {"rotation": (0.30, 0.0, 0.10)},
+        "Neck": {"rotation": (0.06, 0.0, -0.03)},
+        "Head": {"rotation": (-0.16, 0.0, 0.0)},
+        "UpperArm.L": {"rotation": (-0.34, 0.0, 0.44)},
+        "UpperArm.R": {"rotation": (-0.34, 0.0, -0.44)},
+        "LowerArm.L": {"rotation": (-0.20, 0.0, 0.18)},
+        "LowerArm.R": {"rotation": (-0.20, 0.0, -0.18)},
     }
-    actions["Hit"] = build_action(armature, "Hit", [(1, {}), (4, hit_recoil), (8, hit_recoil), (14, {})])
+    # 衝撃を受けきった後に少し戻す中間ポーズ。以前は 4〜8 フレームで同じポーズを
+    # 保持していて、のけぞったまま静止する不自然さがあった。
+    hit_settle = {
+        "Hips": {"location": (0.0, 0.012, -0.020), "rotation": (-0.04, 0.0, -0.02)},
+        "Spine": {"rotation": (0.07, 0.0, 0.02)},
+        "Chest": {"rotation": (0.13, 0.0, 0.04)},
+        "Neck": {"rotation": (0.02, 0.0, -0.01)},
+        "Head": {"rotation": (-0.06, 0.0, 0.0)},
+        "UpperArm.L": {"rotation": (-0.14, 0.0, 0.18)},
+        "UpperArm.R": {"rotation": (-0.14, 0.0, -0.18)},
+    }
+    actions["Hit"] = build_action(armature, "Hit", [(1, {}), (3, hit_recoil), (8, hit_settle), (14, {})])
 
     if is_hero:
         dash_pose = {

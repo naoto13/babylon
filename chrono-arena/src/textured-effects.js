@@ -492,11 +492,30 @@ export class TexturedEffectController {
     slot.mesh.setEnabled(true);
   }
 
+  // 攻撃の予兆。敵自身の足元に魔法陣を敷いたり、敵の体を貫くように稲妻を立てたりすると
+  // 「敵自身が被弾している」ように読めてしまうため、敵の位置には何も出さない。
+  // 予兆は攻撃が届く先（弾の軌道・雷の線上）で示す。
   spawnTelegraph(position, element, duration) {
     const scale = this.scaleFor(element);
-    this.spawnRune(position, element, (element === "fire" ? 1.08 : 0.94) * scale, duration);
-    if (element === "lightning" && this.quality !== "low") this.spawnLightning(position, element, 0.78 * scale, duration * 0.78, 2);
-    if (element === "void" && this.quality !== "low") this.spawnSwirl(position, 0.7 * scale, duration);
+    if (element === "fire") this.spawnRune(position, element, 1.08 * scale, duration);
+  }
+
+  /**
+   * 雷が当たる範囲を、線分上に紫の円を並べて予告する。
+   * start から direction 方向へ length ぶん、等間隔に円を置く。
+   */
+  spawnLightningTargetMarkers(start, direction, length, duration, radius = 0.62) {
+    const count = this.quality === "low" ? 3 : 5;
+    for (let index = 0; index < count; index += 1) {
+      const t = (index + 0.5) / count;
+      const position = {
+        x: start.x + direction.x * length * t,
+        y: start.y,
+        z: start.z + direction.z * length * t
+      };
+      // 先端ほど大きくして、どちらへ伸びるかを読ませる
+      this.spawnRune(position, "lightning", radius * (0.72 + t * 0.5), duration);
+    }
   }
 
   spawnElementalImpact(position, element, direction = Vector3.Zero()) {

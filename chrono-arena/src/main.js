@@ -1072,6 +1072,13 @@ function createLightningStrikePoolSlot(index) {
       this.telegraphCore.setEnabled(true);
       this.beamOuter.setEnabled(false);
       this.beamCore.setEnabled(false);
+      // 当たり判定の範囲を紫の円で予告する。線だけだと「どこに当たるか」が読みにくい。
+      texturedEffects?.spawnLightningTargetMarkers(
+        this.start,
+        direction,
+        LIGHTNING_STRIKE_CONFIG.length,
+        LIGHTNING_STRIKE_CONFIG.telegraphSeconds
+      );
       this.updateTelegraph(0);
       this.applyQuality();
       this.root.setEnabled(true);
