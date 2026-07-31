@@ -223,34 +223,42 @@ def create_actions(armature: bpy.types.Object, *, is_hero: bool) -> dict[str, bp
          (13, locomotion_pose(math.pi)), (19, locomotion_pose(math.pi * 1.5)), (25, locomotion_pose(math.pi * 2))],
     )
 
+    # 腕主体の振りにする。以前は Chest の Z が -0.50→+0.66（66度）も振れていて、
+    # 腕を振っているのではなく胴ごと回っているように見えた。胴の振れを約1/3に抑え、
+    # 代わりに UpperArm と LowerArm の振り幅を広げて肘の曲げ伸ばしを見せる。
     attack_windup = {
-        "Hips": {"location": (0.0, 0.025, -0.035), "rotation": (0.0, 0.0, -0.28), "scale": (1.09, 1.02, 0.91)},
-        "Spine": {"rotation": (0.06, -0.10, -0.24)},
-        "Chest": {"rotation": (0.10, -0.18, -0.50)},
-        "Neck": {"rotation": (-0.03, 0.10, 0.18)},
-        "Head": {"rotation": (-0.06, 0.16, 0.27)},
-        "UpperArm.L": {"rotation": (-1.04, 0.22, 0.68)},
-        "LowerArm.L": {"rotation": (-0.34, 0.0, 0.35)},
-        "UpperArm.R": {"rotation": (0.72, -0.20, -0.68)},
-        "LowerArm.R": {"rotation": (-0.26, 0.0, -0.25)},
+        "Hips": {"location": (0.0, 0.025, -0.035), "rotation": (0.0, 0.0, -0.10), "scale": (1.06, 1.02, 0.94)},
+        "Spine": {"rotation": (0.04, -0.06, -0.09)},
+        "Chest": {"rotation": (0.06, -0.10, -0.17)},
+        "Neck": {"rotation": (-0.02, 0.06, 0.07)},
+        "Head": {"rotation": (-0.04, 0.10, 0.10)},
+        # 振りかぶり: 腕を大きく後方上へ引き、肘を深く畳む
+        "UpperArm.L": {"rotation": (-1.38, 0.30, 1.02)},
+        "LowerArm.L": {"rotation": (-0.95, 0.0, 0.62)},
+        "UpperArm.R": {"rotation": (0.95, -0.26, -0.95)},
+        "LowerArm.R": {"rotation": (-0.72, 0.0, -0.48)},
     }
     attack_hit = {
-        "Hips": {"location": (0.0, -0.060, 0.025), "rotation": (0.0, 0.0, 0.34), "scale": (0.95, 1.02, 1.08)},
-        "Spine": {"rotation": (-0.08, 0.10, 0.28)},
-        "Chest": {"rotation": (-0.14, 0.20, 0.66)},
-        "Neck": {"rotation": (0.04, -0.10, -0.18)},
-        "Head": {"rotation": (0.08, -0.16, -0.28)},
-        "UpperArm.L": {"rotation": (0.72, -0.30, -0.94)},
-        "LowerArm.L": {"rotation": (0.24, 0.08, -0.42)},
-        "UpperArm.R": {"rotation": (-0.72, 0.22, 0.72)},
-        "LowerArm.R": {"rotation": (0.18, -0.04, 0.36)},
+        "Hips": {"location": (0.0, -0.060, 0.025), "rotation": (0.0, 0.0, 0.12), "scale": (0.96, 1.02, 1.06)},
+        "Spine": {"rotation": (-0.05, 0.06, 0.10)},
+        "Chest": {"rotation": (-0.09, 0.12, 0.22)},
+        "Neck": {"rotation": (0.03, -0.06, -0.07)},
+        "Head": {"rotation": (0.05, -0.10, -0.10)},
+        # 振り下ろし: 腕を前下方へ払い、肘を伸ばし切る
+        "UpperArm.L": {"rotation": (1.05, -0.38, -1.32)},
+        "LowerArm.L": {"rotation": (0.52, 0.10, -0.86)},
+        "UpperArm.R": {"rotation": (-1.02, 0.28, 1.05)},
+        "LowerArm.R": {"rotation": (0.46, -0.06, 0.78)},
     }
     attack_follow = {
-        "Hips": {"rotation": (0.0, 0.0, 0.12)},
-        "Chest": {"rotation": (-0.05, 0.06, 0.24)},
-        "Head": {"rotation": (0.03, -0.05, -0.08)},
-        "UpperArm.L": {"rotation": (0.28, -0.12, -0.36)},
-        "UpperArm.R": {"rotation": (-0.24, 0.10, 0.32)},
+        "Hips": {"rotation": (0.0, 0.0, 0.05)},
+        "Chest": {"rotation": (-0.03, 0.04, 0.09)},
+        "Head": {"rotation": (0.02, -0.03, -0.04)},
+        # 振り抜き後の戻り。腕だけが余韻で揺れる
+        "UpperArm.L": {"rotation": (0.44, -0.16, -0.52)},
+        "LowerArm.L": {"rotation": (0.20, 0.04, -0.30)},
+        "UpperArm.R": {"rotation": (-0.40, 0.14, 0.48)},
+        "LowerArm.R": {"rotation": (0.16, -0.02, 0.26)},
     }
     actions["Attack"] = build_action(
         armature, "Attack", [(1, {}), (5, attack_windup), (10, attack_hit), (15, attack_follow), (21, {})]
