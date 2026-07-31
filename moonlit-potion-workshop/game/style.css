@@ -36,6 +36,7 @@ button.quiet, .icon-button { color: #f7f1df; background: rgba(23, 36, 70, .82); 
 .topbar > div { display: flex; gap: .45rem; align-items: center; }
 .moon { color: #e5dcff; font-size: 1.45rem; line-height: 1; }
 .icon-button { padding: .36rem .6rem; box-shadow: none; font-size: .83rem; }
+.coin-readout { color: #f5d98f; font-size: .82rem; font-variant-numeric: tabular-nums; }
 .overlay-main { position: absolute; inset: 4.4rem clamp(.7rem, 4vw, 3rem) auto; max-width: min(31rem, calc(100vw - 1.4rem)); display: grid; gap: .7rem; }
 .panel, .brew-summary, .notice, .modal-panel {
   border: 1px solid rgba(222, 231, 255, .24); border-radius: 1.05rem;
@@ -85,6 +86,14 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .journal-list li { padding: .75rem 0; border-bottom: 1px solid rgba(213, 225, 255, .15); }
 .journal-list h3 { margin-top: 0; }
 .toggle-row { display: flex; align-items: center; gap: .6rem; padding: .65rem 0; }
+.market-offer { margin-top: .75rem; padding: .6rem .7rem; border-radius: .65rem; color: #fff4d0; background: rgba(109, 84, 31, .35); }
+.market-balance { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; font-variant-numeric: tabular-nums; color: #f5d98f; }
+.market-balance b { font-size: 1.35rem; }
+.market-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .5rem; margin: .45rem 0 1rem; padding: 0; list-style: none; }
+.market-card { display: flex; align-items: center; justify-content: space-between; gap: .65rem; min-height: 4rem; padding: .55rem .65rem; border: 1px solid rgba(213, 225, 255, .17); border-radius: .7rem; background: rgba(20, 35, 74, .36); }
+.market-card div { display: grid; gap: .08rem; min-width: 0; }
+.market-card small { color: #bdc8de; }
+.market-card button { flex: 0 0 auto; padding: .38rem .5rem; font-size: .76rem; }
 .toggle-row input { inline-size: 1.15rem; block-size: 1.15rem; accent-color: #efc66e; }
 #boot-error { position: fixed; z-index: 5; inset: auto 1rem 1rem; display: none; max-width: 35rem; padding: .8rem 1rem; border-radius: .8rem; color: #fff3df; background: #572b35; box-shadow: 0 .8rem 2rem rgba(0,0,0,.4); }
 #boot-error.visible { display: block; }
