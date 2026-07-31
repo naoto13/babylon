@@ -347,11 +347,8 @@ def rune_mask(kind: str) -> Image.Image:
         ring(42, 1.25)
     elif kind == "chrono":
         # 太細のリングを重ね、時計の文字盤と歯車帯を分けて読ませる。
-        ring(190, 1.9)
-        ring(181, 1.05)
         ring(170, 2.3)
         ring(128, 1.7)
-        ring(116, 1.0)
         for tick in range(60):
             angle = tick * math.tau / 60 - math.pi / 2
             outer = 214
@@ -525,7 +522,7 @@ def swirl() -> Image.Image:
     glow = mask.filter(ImageFilter.GaussianBlur(6.2 * AA))
     image = Image.new("RGBA", mask.size, (0, 0, 0, 0))
     glow_layer = Image.new("RGBA", mask.size, (194, 194, 194, 0))
-    glow_layer.putalpha(glow.point(lambda value: round(value * 0.48)))
+    glow_layer.putalpha(glow.point(lambda value: round(value * 0.65)))
     image.alpha_composite(glow_layer)
     core_layer = Image.new("RGBA", mask.size, (225, 225, 225, 0))
     core_layer.putalpha(mask)
