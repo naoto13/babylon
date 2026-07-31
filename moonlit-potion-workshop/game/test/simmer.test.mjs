@@ -3,22 +3,24 @@ import assert from "node:assert/strict";
 
 import { getSimmerDifficulty, getSimmerSettings } from "../js/simmer.js";
 
-test("simmer timing windows narrow from the first night through the final night", () => {
-  const first = getSimmerSettings({ orderIndex: 0, tempBand: "low" });
-  const middle = getSimmerSettings({ orderIndex: 4, tempBand: "mid" });
-  const final = getSimmerSettings({ orderIndex: 8, tempBand: "high" });
+test("simmer timing windows narrow with the active material and workshop ranks", () => {
+  const first = getSimmerSettings({ materialIds: ["moon-petal"], workshopRank: "common", tempBand: "low" });
+  const middle = getSimmerSettings({ materialIds: ["silvermoss"], workshopRank: "common", tempBand: "mid" });
+  const final = getSimmerSettings({ materialIds: ["moon-petal"], workshopRank: "rare", tempBand: "high" });
 
   assert.deepEqual(first, {
     targetSeconds: 5,
     perfectWindow: 0.45,
     goodWindow: 1.1,
-    difficulty: { id: "apprentice", label: "第1夜・見習い", perfectWindow: 0.45, goodWindow: 1.1 },
+    difficulty: { id: "common", label: "基本錬金", perfectWindow: 0.45, goodWindow: 1.1, source: "素材・工房" },
   });
-  assert.equal(middle.difficulty.id, "adept");
+  assert.equal(middle.difficulty.id, "uncommon");
+  assert.equal(middle.difficulty.source, "素材");
   assert.equal(middle.targetSeconds, 3.5);
   assert.equal(middle.perfectWindow, 0.32);
   assert.equal(middle.goodWindow, 0.75);
-  assert.equal(final.difficulty.id, "master");
+  assert.equal(final.difficulty.id, "rare");
+  assert.equal(final.difficulty.source, "工房");
   assert.equal(final.targetSeconds, 2.5);
   assert.equal(final.perfectWindow, 0.22);
   assert.equal(final.goodWindow, 0.55);
@@ -27,14 +29,16 @@ test("simmer timing windows narrow from the first night through the final night"
 });
 
 test("gentle timing mode widens every visible simmer band without changing its target", () => {
-  const standard = getSimmerSettings({ orderIndex: 8, tempBand: "high" });
-  const gentle = getSimmerSettings({ orderIndex: 8, tempBand: "high", gentleTechnique: true });
+  const standard = getSimmerSettings({ materialIds: ["star-salt"], workshopRank: "rare", tempBand: "high" });
+  const gentle = getSimmerSettings({ materialIds: ["star-salt"], workshopRank: "rare", tempBand: "high", gentleTechnique: true });
   assert.equal(gentle.targetSeconds, standard.targetSeconds);
   assert.equal(gentle.perfectWindow, 0.33);
   assert.equal(gentle.goodWindow, 0.825);
 });
 
-test("difficulty is clamped to the final night and rejects an unknown heat band", () => {
-  assert.equal(getSimmerDifficulty(999).id, "master");
-  assert.throws(() => getSimmerSettings({ orderIndex: 0, tempBand: "ember" }), /unknown simmer temperature/);
+test("the higher of active material and workshop rank wins, and invalid heat is rejected", () => {
+  assert.equal(getSimmerDifficulty({ materialIds: ["toadcap"], workshopRank: "common" }).id, "rare");
+  assert.equal(getSimmerDifficulty({ materialIds: ["moon-petal"], workshopRank: "uncommon" }).id, "uncommon");
+  assert.equal(getSimmerDifficulty({ materialIds: ["unknown"], workshopRank: "common" }).id, "common");
+  assert.throws(() => getSimmerSettings({ materialIds: [], workshopRank: "common", tempBand: "ember" }), /unknown simmer temperature/);
 });

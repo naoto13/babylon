@@ -53,7 +53,7 @@ function brewSummary(state, materialById, interaction) {
     const readout = numeric ? `${simmer.elapsed.toFixed(1)} / ${simmer.targetSeconds.toFixed(1)} 秒` : "黄金の芯で離す";
     return `<div class="simmer-meter" style="--simmer-value:${elapsed}%;--good-start:${goodStart}%;--good-end:${goodEnd}%;--perfect-start:${perfectStart}%;--perfect-end:${perfectEnd}%" aria-label="火加減メーター。黄金の帯で離すと成功しやすい">
       <div class="simmer-meter-track" aria-hidden="true"><i class="simmer-good-zone"></i><i class="simmer-perfect-zone"></i><b class="simmer-cursor"></b></div>
-      <div class="simmer-meter-label"><span>${escapeHtml(simmer.difficulty?.label ?? "火加減の山")}</span><strong>${readout}</strong></div>
+      <div class="simmer-meter-label"><span>${escapeHtml(simmer.difficulty ? `${simmer.difficulty.label}・${simmer.difficulty.source}` : "火加減の山")}</span><strong>${readout}</strong></div>
     </div>`;
   })() : "";
   const simmerButton = state.phase === "CRAFT"

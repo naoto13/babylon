@@ -306,7 +306,8 @@ function startWorkshop() {
     getSimmerSettings: () => {
       if (state.phase !== "CRAFT" || state.brew.items.length === 0) return null;
       return getSimmerSettings({
-        orderIndex: state.orderIndex,
+        materialIds: state.brew.items.map((item) => item.materialId),
+        workshopRank: getWorkshopRank(state.economy.ownedAssetIds),
         tempBand: state.brew.tempBand,
         gentleTechnique: state.settings.gentleTechnique,
       });
