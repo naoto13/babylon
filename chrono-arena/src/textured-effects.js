@@ -42,11 +42,13 @@ function setSheetFrame(slot, frame) {
  * ParticleSystem は属性×用途で1基だけ持ち、world space の emitter を差し替えて手動バーストする。
  */
 export class TexturedEffectController {
-  constructor({ scene, assetPaths, palette, prefersReducedMotion, visualTestMode = false }) {
+  constructor({ scene, assetPaths, palette, prefersReducedMotion, visualTestMode = false, playbackRate = 1 }) {
     this.scene = scene;
     this.palette = palette;
     this.prefersReducedMotion = prefersReducedMotion;
     this.visualTestMode = visualTestMode;
+    // 管理プレビューだけが 1/10 まで速度を落とせる。未指定の本編は常に等倍のまま。
+    this.playbackRate = Math.min(1, Math.max(0.1, Number(playbackRate) || 1));
     this.elapsed = 0;
     this.quality = "mid";
     this.burstMultiplier = prefersReducedMotion ? 0.36 : 0.72;
@@ -366,7 +368,14 @@ export class TexturedEffectController {
       system.maxLifeTime = profile.maxLife * lifetime;
       system.minEmitBox.copyFrom(profile.minEmitBox.scale(scale));
       system.maxEmitBox.copyFrom(profile.maxEmitBox.scale(scale));
+      system.updateSpeed = 0.01 * this.playbackRate;
+      if (system.isAnimationSheetEnabled) system.spriteCellChangeSpeed = 2.5 * this.playbackRate;
     }
+  }
+
+  setPlaybackRate(rate = 1) {
+    this.playbackRate = Math.min(1, Math.max(0.1, Number(rate) || 1));
+    this.applyQuality(this.quality);
   }
 
   scaleFor(element) {

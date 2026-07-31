@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050914" />
+    <meta name="description" content="Chrono Arena のアニメーション一覧と敵攻撃演出を確認する管理ページ" />
+    <title>Chrono Arena — Combat Preview</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font: 100%/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #050914;
+        color: #edf8ff;
+      }
+
+      * { box-sizing: border-box; }
+
+      body { min-width: 320px; min-height: 100vh; margin: 0; overflow: hidden; background: #050914; }
+      button, select { font: inherit; }
+      a { color: #9defff; }
+      a:hover { color: #effdff; }
+
+      #render-canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+      #motion-labels { position: fixed; z-index: 2; inset: 0; pointer-events: none; }
+
+      .motion-label {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        padding: 0.22rem 0.46rem;
+        border: 1px solid rgb(191 238 255 / 0.38);
+        border-radius: 999px;
+        background: rgb(4 14 27 / 0.8);
+        box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.3);
+        color: #ecfbff;
+        font-size: 0.7rem;
+        font-weight: 760;
+        letter-spacing: 0.025em;
+        white-space: nowrap;
+        backdrop-filter: blur(10px) saturate(150%);
+      }
+
+      .panel {
+        position: fixed;
+        z-index: 3;
+        top: max(0.8rem, env(safe-area-inset-top));
+        left: max(0.8rem, env(safe-area-inset-left));
+        width: min(31rem, calc(100vw - 1.6rem));
+        padding: 0.9rem 1rem 0.8rem;
+        border: 1px solid rgb(176 229 255 / 0.29);
+        border-radius: 1rem;
+        background: rgb(5 18 34 / 0.78);
+        box-shadow: 0 1.1rem 3.3rem rgb(0 0 0 / 0.32);
+        backdrop-filter: blur(20px) saturate(155%);
+      }
+
+      .breadcrumb { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; color: #a7c7d8; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.035em; }
+      h1 { margin: 0.32rem 0 0; color: #f1fbff; font-size: clamp(1.05rem, 2.4vw, 1.36rem); line-height: 1.1; letter-spacing: -0.025em; }
+      .intro { margin: 0.35rem 0 0; color: #b6d0df; font-size: 0.78rem; }
+
+      .controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-top: 0.75rem; }
+      label { display: grid; gap: 0.22rem; color: #b7d7e8; font-size: 0.66rem; font-weight: 760; letter-spacing: 0.055em; }
+      select, button {
+        min-height: 2.28rem;
+        border: 1px solid rgb(174 229 255 / 0.31);
+        border-radius: 0.58rem;
+        padding: 0.3rem 0.48rem;
+        background: rgb(13 39 63 / 0.92);
+        color: #f1fbff;
+      }
+      button { cursor: pointer; font-size: 0.76rem; font-weight: 760; letter-spacing: 0.015em; transition: transform 100ms ease-out, background-color 140ms ease; }
+      button:hover:not(:disabled) { background: rgb(25 70 100 / 0.96); }
+      button:active:not(:disabled) { transform: scale(0.97); }
+      button:disabled { cursor: not-allowed; border-color: rgb(140 163 180 / 0.2); background: rgb(31 45 58 / 0.72); color: #7890a0; }
+      button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid #82eaff; outline-offset: 3px; }
+
+      .attack-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin-top: 0.7rem; }
+      .attack-controls[hidden] { display: none; }
+      .status { min-height: 1.25rem; margin: 0.68rem 0 0; color: #c3dce9; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+      .status[data-state="error"] { color: #ffacb9; }
+      .status strong { color: #effcff; }
+
+      .mode-hint { margin: 0.42rem 0 0; color: #88aabd; font-size: 0.68rem; }
+
+      @media (prefers-reduced-motion: reduce) {
+        button { transition: none; }
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        .panel, .motion-label { background: #071426; backdrop-filter: none; }
+      }
+
+      @media (max-width: 560px) {
+        .controls { grid-template-columns: 1fr; }
+        .panel { max-height: calc(100vh - 1.6rem); overflow: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="render-canvas" aria-label="Chrono Arena の戦闘モーションと攻撃演出のプレビュー"></canvas>
+    <div id="motion-labels" aria-hidden="true"></div>
+    <aside class="panel" aria-label="戦闘プレビュー設定">
+      <nav class="breadcrumb" aria-label="関連プレビュー">
+        <a href="./asset-preview.html">Asset Preview</a>
+        <span aria-hidden="true">/</span>
+        <a href="./effect-preview.html">Effect Preview</a>
+        <span aria-hidden="true">/</span>
+        <span>Combat Preview</span>
+      </nav>
+      <h1>戦闘モーション・攻撃演出プレビュー</h1>
+      <p class="intro">本編と同じ IBL / ACES / SSAO / Glow / リムライト条件で、全クリップと敵攻撃を確認します。</p>
+      <div class="controls">
+        <label>
+          表示モード
+          <select id="mode-select" aria-label="表示モード">
+            <option value="motions">モーション一覧</option>
+            <option value="attack">攻撃演出</option>
+          </select>
+        </label>
+        <label>
+          キャラ
+          <select id="model-select" aria-label="表示するキャラ">
+            <option value="hero">Hero</option>
+            <option value="chaser">Chaser</option>
+            <option value="shooter">Shooter</option>
+            <option value="thief">Thief</option>
+            <option value="boss">Boss</option>
+          </select>
+        </label>
+        <label>
+          演出速度
+          <select id="slow-select" aria-label="演出速度">
+            <option value="1">1×（等倍）</option>
+            <option value="2">1/2×</option>
+            <option value="4">1/4×</option>
+            <option value="10">1/10×</option>
+          </select>
+        </label>
+      </div>
+      <div id="attack-controls" class="attack-controls" hidden aria-label="攻撃発火">
+        <button type="button" data-attack="normal">通常弾</button>
+        <button type="button" data-attack="lightning">雷</button>
+        <button type="button" data-attack="melee">近接</button>
+      </div>
+      <p id="mode-hint" class="mode-hint"></p>
+      <p id="status" class="status" aria-live="polite">シーンを準備中…</p>
+    </aside>
+    <script type="module" src="./combat-preview.js"></script>
+  </body>
+</html>
