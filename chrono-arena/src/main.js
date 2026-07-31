@@ -1466,7 +1466,9 @@ function createEnemyProjectilePoolSlot(form, index) {
       tail.rotation.z = (tailIndex - 1) * 0.15;
       flameTails.push(tail);
     }
-    fireSprite = addFormMesh(CreatePlane(`flame-sheet-${index}`, { size: 1.46 }, scene));
+    // updatable: true が無いとスプライトシートのフレーム切り出しが反映されず、
+    // 8×8のシート全体が板に貼られたまま表示される。
+    fireSprite = addFormMesh(CreatePlane(`flame-sheet-${index}`, { size: 1.46, updatable: true }, scene));
     fireSprite.position.y = 0.42;
     fireSprite.material = texturedEffects.materials.flame.fire;
     fireSprite.billboardMode = 7;

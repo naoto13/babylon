@@ -139,7 +139,10 @@ export class TexturedEffectController {
 
   createPlanePool(name, capacity, { horizontal, size }) {
     return Array.from({ length: capacity }, (_, index) => {
-      const mesh = CreatePlane(`textured-${name}-${index}`, { size }, this.scene);
+      // updatable: true が無いと updateVerticesData が反映されず、スプライトシートの
+      // フレーム切り出し（setSheetFrame）が効かない。シート全体（8×8の輪が並んだ面）が
+      // そのまま表示され、魔法陣に白い格子が重なって見える不具合になっていた。
+      const mesh = CreatePlane(`textured-${name}-${index}`, { size, updatable: true }, this.scene);
       mesh.rotation.x = horizontal ? Math.PI / 2 : 0;
       mesh.isPickable = false;
       mesh.setEnabled(false);
