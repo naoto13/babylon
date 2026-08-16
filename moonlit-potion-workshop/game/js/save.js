@@ -1,9 +1,10 @@
 import { MATERIAL_BY_ID } from "./data.js";
+import { createStartingEconomy, isValidEconomy } from "./economy.js";
 
 /** Browser-only, versioned persistence for the workshop's player-owned state. */
 
 export const SAVE_KEY = "moonlit-potion-workshop.save";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 const TEMP_BANDS = new Set(["low", "mid", "high"]);
 const PREPS = new Set(["none", "cut", "crush"]);
@@ -21,12 +22,13 @@ export function freshGameState() {
     phase: "TITLE",
     questionAsked: false,
     dialogue: "",
-    brew: { items: [], tempBand: "mid", stirLaps: 0, preps: {}, technique: { stirQuality: 50, simmer: "none" } },
+    brew: { items: [], tempBand: "low", stirLaps: 0, preps: {}, technique: { stirQuality: 50, simmer: "none" } },
     appraisal: null,
     delivery: null,
     journal: [],
     holdShelf: [null, null],
     settings: { numericValues: false, gentleTechnique: false },
+    economy: createStartingEconomy(),
   };
 }
 
@@ -99,12 +101,13 @@ function validDelivery(delivery) {
  * is deliberately treated as no save so it cannot strand the player mid-order.
  */
 export function validateSavedState(candidate) {
-  if (!isRecord(candidate) || candidate.v !== SAVE_VERSION || !isRecord(candidate.state)) return null;
+  if (!isRecord(candidate) || ![1, SAVE_VERSION].includes(candidate.v) || !isRecord(candidate.state)) return null;
+  const isLegacy = candidate.v === 1;
   const { state } = candidate;
   if (!Number.isInteger(state.reputation) || !Number.isInteger(state.night) || state.night < 1 || state.night > 3 || !Number.isInteger(state.orderIndex)
     || state.orderIndex < 0 || state.orderIndex > 12 || !PHASES.has(state.phase)
     || !validBrew(state.brew) || !Array.isArray(state.journal) || !state.journal.every(validJournalEntry) || !Array.isArray(state.holdShelf)
-    || state.holdShelf.length !== 2 || !isRecord(state.settings)) return null;
+    || state.holdShelf.length !== 2 || !isRecord(state.settings) || (!isLegacy && !isValidEconomy(state.economy))) return null;
   if (!state.holdShelf.every((bottle) => bottle === null || validBottle(bottle))) return null;
   if (state.appraisal !== null && (!isRecord(state.appraisal)
     || !validBrew({ ...state.appraisal.input, preps: state.appraisal.input?.preps ?? {} })
@@ -123,6 +126,7 @@ export function validateSavedState(candidate) {
   sanitized.dialogue = typeof sanitized.dialogue === "string" ? sanitized.dialogue : "";
   sanitized.settings.numericValues = Boolean(sanitized.settings.numericValues);
   sanitized.settings.gentleTechnique = Boolean(sanitized.settings.gentleTechnique);
+  sanitized.economy = isLegacy ? createStartingEconomy() : clone(sanitized.economy);
   sanitized.brew.technique = {
     stirQuality: sanitized.brew.technique?.stirQuality ?? 50,
     simmer: sanitized.brew.technique?.simmer ?? "none",

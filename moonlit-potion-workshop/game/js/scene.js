@@ -1333,14 +1333,15 @@ async function loadHeroProp(name, config, context) {
       const clones = prepareJarHeroClones(name, heroAnchor, context);
       heroAnchor.setEnabled(false);
       for (const { materialId, fallback, clone } of clones) {
-        context.jars.set(materialId, clone);
-        fallback.setEnabled(false);
+        context.jarHeroClones.set(materialId, clone);
       }
+      context.applyAssetVisibility(name);
     } else {
       // Visual scale is a parent-layer multiplier after fit normalisation.
       registerHeroLayoutAnchor(name, heroAnchor, context);
-      for (const fallback of fallbacks) fallback.setEnabled(false);
       context.heroAnchors.set(name, heroAnchor);
+      context.heroVisuals.set(name, { anchor: heroAnchor, fallbacks });
+      context.applyAssetVisibility(name);
       if (name === "cauldron") fitCauldronInterior(meshes, context.scene);
     }
   } catch (error) {
@@ -1484,6 +1485,8 @@ async function loadDressingProp(name, config, context) {
       }
     }
     hideProceduralDressing(config, scene);
+    context.dressingAssetAnchors.set(name, anchors);
+    context.applyAssetVisibility(name);
   } catch (error) {
     for (const mesh of meshes) mesh.setEnabled?.(false);
     for (const anchor of anchors) anchor.setEnabled(false);
@@ -1732,6 +1735,40 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     ["lens", lens.metadata.action],
     ["tray", tray.metadata.action],
   ]);
+  // Marketplace ownership controls the imported appearance, not the basic
+  // interaction affordances. An unowned hero prop stays usable as its simple
+  // procedural mesh so the first craft → appraisal → sale loop is never gated.
+  const workshopOwnership = new Set(["cauldron"]);
+  const heroVisuals = new Map();
+  const jarHeroClones = new Map();
+  const jarFallbacks = new Map(jars);
+  const dressingAssetAnchors = new Map();
+  const isAssetOwned = (name) => workshopOwnership.has(name);
+  const applyAssetVisibility = (name) => {
+    const owned = isAssetOwned(name);
+    if (name === "jar") {
+      for (const [materialId, fallback] of jarFallbacks) {
+        const clone = jarHeroClones.get(materialId);
+        fallback.setEnabled(!owned);
+        clone?.setEnabled(owned);
+        jars.set(materialId, owned && clone ? clone : fallback);
+      }
+      return;
+    }
+    const visual = heroVisuals.get(name);
+    if (visual) {
+      visual.anchor.setEnabled(owned);
+      for (const fallback of visual.fallbacks) fallback.setEnabled(!owned);
+    }
+    for (const anchor of dressingAssetAnchors.get(name) ?? []) anchor.setEnabled(owned);
+  };
+  const setWorkshopOwnership = (ownedAssetIds) => {
+    workshopOwnership.clear();
+    for (const id of ownedAssetIds ?? []) workshopOwnership.add(id);
+    for (const name of heroVisuals.keys()) applyAssetVisibility(name);
+    if (jarHeroClones.size) applyAssetVisibility("jar");
+    for (const name of dressingAssetAnchors.keys()) applyAssetVisibility(name);
+  };
   loadHeroAssets({
     scene,
     actions,
@@ -1744,6 +1781,9 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     heroLayoutAnchors,
     layoutOverrides,
     layoutMode,
+    heroVisuals,
+    jarHeroClones,
+    applyAssetVisibility,
   });
 
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -1762,6 +1802,8 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     dressingAnchors,
     layoutMode,
     layoutOverrides,
+    dressingAssetAnchors,
+    applyAssetVisibility,
   });
   let highlighted = [];
   let currentTemp = "mid";
@@ -2086,6 +2128,7 @@ export function createWorkshopScene(engine, canvas, materials, { layoutMode = fa
     setLiquidState,
     setSimmerState,
     playPourBurst,
+    setWorkshopOwnership,
     dispose: () => scene.dispose(),
   };
 }

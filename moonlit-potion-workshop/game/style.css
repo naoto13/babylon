@@ -36,6 +36,7 @@ button.quiet, .icon-button { color: #f7f1df; background: rgba(23, 36, 70, .82); 
 .topbar > div { display: flex; gap: .45rem; align-items: center; }
 .moon { color: #e5dcff; font-size: 1.45rem; line-height: 1; }
 .icon-button { padding: .36rem .6rem; box-shadow: none; font-size: .83rem; }
+.coin-readout { color: #f5d98f; font-size: .82rem; font-variant-numeric: tabular-nums; }
 .overlay-main { position: absolute; inset: 4.4rem clamp(.7rem, 4vw, 3rem) auto; max-width: min(31rem, calc(100vw - 1.4rem)); display: grid; gap: .7rem; }
 .panel, .brew-summary, .notice, .modal-panel {
   border: 1px solid rgba(222, 231, 255, .24); border-radius: 1.05rem;
@@ -61,6 +62,15 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .brew-summary .ingredients { max-width: 100%; margin: .22rem 0 .45rem; font-size: .92rem; }
 .brew-summary > div { display: flex; justify-content: space-between; gap: 1rem; font-size: .84rem; }
 .simmer-button { inline-size: 100%; margin-top: .55rem; }
+.simmer-button.simmer-active { border-color: rgba(255, 223, 128, .9); color: #fff7dc; background: linear-gradient(145deg, rgba(172, 97, 45, .92), rgba(98, 43, 34, .92)); box-shadow: 0 0 .9rem rgba(248, 183, 92, .34); }
+.brew-summary > .simmer-meter { display: block; margin: .58rem 0 .1rem; }
+.simmer-meter-track { position: relative; overflow: hidden; inline-size: 100%; block-size: .82rem; border: 1px solid rgba(236, 225, 196, .32); border-radius: 999px; background: linear-gradient(to right, rgba(91, 121, 179, .28), rgba(112, 61, 52, .5)); }
+.simmer-good-zone, .simmer-perfect-zone, .simmer-cursor { position: absolute; display: block; }
+.simmer-good-zone { inset: 0 auto 0 var(--good-start); inline-size: calc(var(--good-end) - var(--good-start)); background: rgba(244, 188, 92, .48); }
+.simmer-perfect-zone { inset: 0 auto 0 var(--perfect-start); inline-size: calc(var(--perfect-end) - var(--perfect-start)); background: #fff1a8; box-shadow: 0 0 .8rem rgba(255, 228, 122, .9); }
+.simmer-cursor { z-index: 1; inset: -.18rem auto -.18rem var(--simmer-value); inline-size: .28rem; border-radius: 999px; background: #fffdf3; box-shadow: 0 0 .6rem #fff5be; transform: translateX(-50%); will-change: left; }
+.simmer-meter-label { display: flex; justify-content: space-between; gap: .75rem; margin-top: .25rem; color: #dce5f8; font-size: .76rem; }
+.simmer-meter-label strong { color: #ffe8a3; }
 .pour-gauge { margin: .55rem 0 .2rem; }
 .pour-gauge-track { position: relative; overflow: hidden; block-size: .62rem; border: 1px solid rgba(245, 217, 143, .42); border-radius: 99px; background: linear-gradient(to right, rgba(118, 150, 200, .28) 0 var(--ideal-start), rgba(244, 207, 128, .65) var(--ideal-start) var(--ideal-end), rgba(180, 82, 74, .42) var(--ideal-end) 100%); }
 .pour-gauge-track i { position: absolute; inset: 0 auto 0 0; inline-size: var(--pour-value); border-radius: inherit; background: rgba(255, 250, 220, .78); box-shadow: 0 0 .7rem rgba(255, 226, 140, .68); }
@@ -85,6 +95,33 @@ blockquote { margin: .6rem 0; color: #fff9e6; font-size: 1.13rem; line-height: 1
 .journal-list li { padding: .75rem 0; border-bottom: 1px solid rgba(213, 225, 255, .15); }
 .journal-list h3 { margin-top: 0; }
 .toggle-row { display: flex; align-items: center; gap: .6rem; padding: .65rem 0; }
+.market-offer { margin-top: .75rem; padding: .6rem .7rem; border-radius: .65rem; color: #fff4d0; background: rgba(109, 84, 31, .35); }
+.market-balance { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; font-variant-numeric: tabular-nums; color: #f5d98f; }
+.market-balance b { font-size: 1.35rem; }
+.market-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .5rem; margin: .45rem 0 1rem; padding: 0; list-style: none; }
+.market-card { display: flex; align-items: center; justify-content: space-between; gap: .65rem; min-height: 4rem; padding: .55rem .65rem; border: 1px solid rgba(213, 225, 255, .17); border-radius: .7rem; background: rgba(20, 35, 74, .36); }
+.market-card div { display: grid; gap: .08rem; min-width: 0; }
+.market-card small { color: #bdc8de; }
+.market-card button { flex: 0 0 auto; padding: .38rem .5rem; font-size: .76rem; }
+.rarity-frame {
+  --rarity-border: rgba(149, 189, 231, .58);
+  --rarity-glow: rgba(104, 158, 223, .16);
+  border-color: var(--rarity-border);
+  box-shadow: 0 .35rem .9rem rgba(0, 0, 0, .22), 0 0 .8rem var(--rarity-glow), inset 0 1px rgba(255, 255, 255, .08);
+}
+.rarity-uncommon { --rarity-border: rgba(108, 221, 174, .64); --rarity-glow: rgba(72, 206, 158, .18); }
+.rarity-rare { --rarity-border: rgba(211, 151, 255, .72); --rarity-glow: rgba(194, 112, 255, .22); }
+.rarity-badge { display: inline-block; margin-right: .2rem; padding: .08rem .34rem; border: 1px solid currentColor; border-radius: 999px; font-size: .62rem; font-weight: 700; letter-spacing: .045em; line-height: 1.25; vertical-align: .08em; }
+.rarity-badge.rarity-common { color: #a9c8eb; background: rgba(105, 155, 214, .11); }
+.rarity-badge.rarity-uncommon { color: #87e5bd; background: rgba(81, 202, 151, .12); }
+.rarity-badge.rarity-rare { color: #e0b6ff; background: rgba(190, 115, 245, .13); }
+.ingredient-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.material-art { display: block; inline-size: 3.2rem; block-size: 3.2rem; flex: 0 0 3.2rem; border: 1px solid rgba(226, 236, 255, .26); border-radius: .62rem; object-fit: cover; box-shadow: 0 .3rem .9rem rgba(0, 0, 0, .26); }
+.material-market-card { min-height: 4.7rem; }
+.material-market-card .material-art { inline-size: 3.6rem; block-size: 3.6rem; flex-basis: 3.6rem; }
+.ingredient-actions button { display: inline-flex; align-items: center; gap: .45rem; text-align: left; }
+.ingredient-actions .ingredient-art { inline-size: 2.15rem; block-size: 2.15rem; flex-basis: 2.15rem; border-radius: .48rem; }
+.ingredient-actions small { color: currentColor; opacity: .74; }
 .toggle-row input { inline-size: 1.15rem; block-size: 1.15rem; accent-color: #efc66e; }
 #boot-error { position: fixed; z-index: 5; inset: auto 1rem 1rem; display: none; max-width: 35rem; padding: .8rem 1rem; border-radius: .8rem; color: #fff3df; background: #572b35; box-shadow: 0 .8rem 2rem rgba(0,0,0,.4); }
 #boot-error.visible { display: block; }
