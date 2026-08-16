@@ -2,6 +2,19 @@
 
 Babylon.jsで動作する、60秒固定見下ろし型アクションローグライトの完成縦切り版です。MPFB2の人体トポロジーを土台にカスタム制作したBlender製主人公、3D敵4種、時計仕掛けアリーナ、能力アイコンを実ゲームへ統合しています。
 
+## 使用技術
+
+| 分類 | 技術 |
+| --- | --- |
+| ランタイム | Babylon.js（`@babylonjs/core` / `@babylonjs/loaders` 9.x）、Web Audio API |
+| ビルド・検証 | Vite 8、Node.js標準テスト（`node --test`）、pnpm |
+| 画像生成 | gpt-image-2 — コンセプト画・三面図・UIアイコン（プロンプトは `ASSET_PROMPTS.md`） |
+| image-to-3D | SPAR3D（初期）→ TRELLIS.2（現行）— ねんどろいど風三面図からキャラクターGLBを生成 |
+| DCC | Blender 4.2以降（5.2 LTSで確認）— リメッシュ・UV再展開・テクスチャベイク・リグ・GLB出力（`scripts/*.py`） |
+| 人体ベース | MPFB2 v2.0.17（CC0）— 主人公・人型敵の土台（由来は `THIRD_PARTY_ASSETS.md`） |
+
+キャラクター制作手順と実測知見の全記録は `docs/character-asset-pipeline.html` を参照してください。
+
 ## 起動
 
 ```bash
