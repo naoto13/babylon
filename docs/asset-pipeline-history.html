@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>アセットパイプライン変遷史</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif; line-height: 1.75; color: #1f2933; background: #f6f7f9; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+      header, section { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 28px; margin: 0 0 16px; }
+      header { border-top: 4px solid #2563eb; }
+      h1 { margin: 0 0 8px; font-size: 1.7rem; line-height: 1.3; }
+      h2 { margin: 0 0 16px; font-size: 1.25rem; line-height: 1.3; padding-bottom: 8px; border-bottom: 2px solid #e1e6ef; }
+      h3 { margin: 24px 0 8px; font-size: 1.05rem; line-height: 1.4; color: #334155; }
+      h3:first-of-type { margin-top: 0; }
+      p, ul, ol { margin: 0 0 12px; }
+      ul, ol { padding-left: 1.4em; }
+      li { margin-bottom: 4px; }
+      code { background: #eef2f7; padding: 0.12em 0.4em; border-radius: 4px; font-size: 0.9em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; }
+      pre code { background: none; padding: 0; color: inherit; }
+      table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 0.94rem; }
+      th, td { border-bottom: 1px solid #e1e6ef; padding: 10px 12px; text-align: left; vertical-align: top; }
+      th { background: #f8fafc; font-weight: 600; white-space: nowrap; }
+      .scroll { overflow-x: auto; }
+      .note { border-left: 4px solid #2563eb; background: #eff6ff; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      .warn { border-left: 4px solid #dc2626; background: #fef2f2; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      .ok { border-left: 4px solid #16a34a; background: #f0fdf4; padding: 14px 18px; margin: 0 0 12px; border-radius: 0 6px 6px 0; }
+      nav ol { columns: 2; column-gap: 32px; }
+      nav a { color: #2563eb; text-decoration: none; }
+      a { color: #2563eb; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      footer { color: #64748b; font-size: 0.9rem; text-align: center; padding: 8px; }
+      .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+      .flow span { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 14px; font-size: 0.92rem; }
+      .flow em { color: #94a3b8; font-style: normal; }
+      @media (max-width: 720px) {
+        header, section { padding: 18px; }
+        nav ol { columns: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <h1>アセットパイプライン変遷史</h1>
+        <p>
+          このリポジトリのアセット生成パイプラインが、gpt-image-2 のコンセプト画から
+          Blender 手組みを経て、SPAR3D（Mac）→ TRELLIS.2/ComfyUI（Windows）へと
+          変遷してきた記録。「なぜ乗り換えたか」をコミット履歴と実測値で残し、
+          散在する知見ドキュメントへの索引ハブを兼ねる。
+        </p>
+      </header>
+
+      <nav>
+        <h2>目次</h2>
+        <ol>
+          <li><a href="#purpose">目的と読み方</a></li>
+          <li><a href="#timeline">年表サマリ</a></li>
+          <li><a href="#history">変遷史</a></li>
+          <li><a href="#current">現行パイプライン（現在地）</a></li>
+          <li><a href="#discontinued">打ち切った経路と理由</a></li>
+          <li><a href="#docs-index">知見ドキュメント索引（ハブ）</a></li>
+          <li><a href="#howto-append">追記の仕方</a></li>
+        </ol>
+      </nav>
+
+      <section id="purpose">
+        <h2>1. 目的と読み方</h2>
+        <p>
+          本書はリポジトリ全体の<strong>変遷史</strong>（§2〜§3、§5）と<strong>知見索引ハブ</strong>（§6）の二役を持つ。
+          個々の手順・実測表・落とし穴の本文は各プロジェクトの docs やスキルに置き、
+          本書は「何が起き・なぜ変えたか」と「どこに何が書いてあるか」だけを持つ。
+          アセット系の作業で知見が増えたら、必ずここへ集約する。更新ルールは
+          <code>.claude/skills/asset-pipeline-history/SKILL.md</code>（asset-pipeline-history スキル）を参照。
+        </p>
+      </section>
+
+      <section id="timeline">
+        <h2>2. 年表サマリ</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>期間（2026）</th><th>経路</th><th>主要コミット</th><th>帰結</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>07-22〜23</td>
+                <td><a href="#era-concept">gpt-image-2 コンセプト画</a></td>
+                <td><code>5efec51</code> <code>421d9ee</code></td>
+                <td>12案の画面イメージから2本を選定。以後の意匠の正本</td>
+              </tr>
+              <tr>
+                <td>07-24〜29</td>
+                <td><a href="#era-spar3d">SPAR3D on Mac（全アセットAI生成）</a></td>
+                <td><code>ece219f</code> <code>2eef9ff</code> <code>3144711</code></td>
+                <td>プロップ量産に成功。精度に限界 → TRELLIS.2 へ</td>
+              </tr>
+              <tr>
+                <td>07-27</td>
+                <td><a href="#era-blender">Blender 手組み（Chrono Arena）</a></td>
+                <td><code>1f7ad1b</code></td>
+                <td>プレイアブル出荷。以後の生成品質の比較基準に</td>
+              </tr>
+              <tr>
+                <td>07-29</td>
+                <td><a href="#era-nendo">三面図→ねんどろいど風</a></td>
+                <td><code>580d118</code> <code>7167a3f</code></td>
+                <td>写実系経路は打ち切り。三面図＋デフォルメの型が確立</td>
+              </tr>
+              <tr>
+                <td>07-30</td>
+                <td><a href="#era-trellis2">TRELLIS.2 転換（Windows/NVIDIA）</a></td>
+                <td><code>c6e47c9</code> <code>d3763d6</code> <code>6003ccd</code> <code>852158a</code> <code>0f7ada2</code></td>
+                <td>hero・敵4体・釜を差し替え。新しい既定経路に</td>
+              </tr>
+              <tr>
+                <td>07-31</td>
+                <td><a href="#era-migration">TRELLIS.2 全面移行</a></td>
+                <td><code>fc79506</code></td>
+                <td>月夜の全35アセット再生成。models/ 42MB→25MB</td>
+              </tr>
+              <tr>
+                <td>08-16</td>
+                <td><a href="#era-reorg">ディレクトリ再編と知見整備</a></td>
+                <td><code>56e2b24</code></td>
+                <td>スキル二本立て化・本ドキュメント新設</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="history">
+        <h2>3. 変遷史</h2>
+        <p>
+          各節は「動機 → やったこと → 実測・学び → 乗換/打ち切り理由」の型で書く。
+          新しい経路を試したら同じ型で末尾に追記する（§7）。
+        </p>
+
+        <h3 id="era-concept">3.1 コンセプト画期（07-22〜23）</h3>
+        <p>
+          <strong>動機。</strong>どのゲームを作るか決めるため、先に「完成画面のイメージ」を作って比較する。
+        </p>
+        <p>
+          <strong>やったこと。</strong><code>5efec51</code>（first commit, 07-22）で開始し、
+          <code>421d9ee</code>（07-23）で gpt-image-2 によりゲーム画面イメージ12枚を1案ずつ生成、
+          ルートの <code>index.html</code> を12案の比較 Atlas として追加した。
+          生成時の共通条件と各案の最終指示は <code>IMAGE_PROMPTS.md</code> に記録してある。
+        </p>
+        <p>
+          <strong>帰結。</strong>12案のうち「Chrono Arena」「月夜のポーション工房」の2本がプロトタイプへ進み、
+          コンセプト画がその後のアセットの意匠の正本になった。
+        </p>
+
+        <h3 id="era-spar3d">3.2 SPAR3D 期 — 月夜のポーション工房 全アセット AI 生成（07-24〜29）</h3>
+        <p>
+          <strong>動機。</strong>コンセプト画で決めた意匠を、手作業モデリングなしでゲームへ入れたい。
+          Apple Silicon Mac（MPS）のローカルで無料・無制限に回せる image-to-3D として SPAR3D を採用した。
+        </p>
+        <p>
+          <strong>やったこと。</strong><code>ece219f</code>（07-24）で月夜のポーション工房の全アセットを
+          AI 生成に置き換え、<code>tools/spar3d/run-spar3d.sh</code> を追加。
+          <code>2eef9ff</code>（07-25）で机上アセット10種を追加、
+          <code>3144711</code>（07-27）で配置エディタ・天球儀アセット・no-cache 開発サーバを導入した。
+        </p>
+        <p>
+          <strong>実測・学び。</strong>テクスチャ+UV 付き glb が1体2〜3分で出る
+          （出所: <code>.claude/skills/mac-image-to-3d/SKILL.md</code>）。
+          参照画像の定型（3/4ビュー・透過 PNG・均一照明・単一オブジェクト）が品質をほぼ決めること、
+          細い開放構造（天球儀のリング等）が生成器の最も苦手な形状で、
+          参照画像側で太めにデフォルメし充填率で潰れを検出する運用が、この期に確立した。
+        </p>
+        <p>
+          <strong>乗換理由。</strong>プロップ量産には十分だったが、形状精度とテクスチャ品質の限界が
+          キャラクター制作（3.4）で顕在化し、TRELLIS.2 転換（3.5）へ繋がった。
+        </p>
+
+        <h3 id="era-blender">3.3 Chrono Arena Blender 手組み期（07-27）</h3>
+        <p>
+          <strong>やったこと。</strong>並行して進んだ Chrono Arena は、<code>1f7ad1b</code>（07-27）で
+          Blender 手組みのカスタムアセットによりプレイアブルを出荷した。
+        </p>
+        <p>
+          <strong>帰結。</strong>この手組みモデルが以後の生成品質の比較基準になった
+          （写実系生成の打ち切り判定は「実機で現行＝手組みモデルに及ばない」だった。3.4）。
+          キャラクターの追加・刷新は、以後スクリプト化された生成パイプラインへ移っていく。
+        </p>
+
+        <h3 id="era-nendo">3.4 三面図→ねんどろいど風パイプライン（07-29）</h3>
+        <p>
+          <strong>動機。</strong>Chrono Arena のキャラクターを SF＋悪魔の意匠へ刷新する。
+          まず写実系の参照画像から SPAR3D で生成する案を試したが、テクスチャの白飛びで意匠が消え、
+          3方式（そのまま利用／単色ティント／参照画像投影）すべて品質未達で打ち切った
+          （証拠: <code>trellis2_Babylon_chrono-arena/.gitignore</code> の
+          <code>materials/</code> に付されたコメント「この経路は品質が要求に届かず打ち切った」）。
+        </p>
+        <p>
+          <strong>やったこと。</strong><code>580d118</code>（07-29）でねんどろいど風デフォルメの
+          三面図パイプライン（キャラ5体）とシーンの質感基盤を追加し、
+          <code>7167a3f</code>（同日）で hero に16ボーンリグを入れ、制作パイプラインを
+          <a href="../trellis2_Babylon_chrono-arena/docs/character-asset-pipeline.html">character-asset-pipeline.html</a>
+          としてドキュメント化した。
+        </p>
+        <p>
+          <strong>実測・学び。</strong>デフォルメで参照画像の情報量を減らすほど生成が正確になる。
+          SPAR3D はアルベドを一定明度へ正規化するため参照画像側では制御できない
+          （入力の平均輝度を 0.216→0.453 に持ち上げても出力は 0.383→0.369 とほぼ不変）。
+          出力メッシュは非連結サーフェスに断片化しており（hero で 1,386 個）、
+          リグ前の Voxel Remesh が前提条件になる。
+          数値基準・落とし穴の詳細は character-asset-pipeline.html §4〜§5 に集約してある。
+        </p>
+        <p>
+          <strong>帰結。</strong>三面図＋デフォルメという「型」は確立したが、
+          SPAR3D 自体の精度限界が明確になり、翌日の TRELLIS.2 転換へ。
+        </p>
+
+        <h3 id="era-trellis2">3.5 TRELLIS.2 転換（07-30）</h3>
+        <div class="note">
+          <strong>転換理由。</strong>SPAR3D の出力品質は公開されている最新モデルに明確に劣る。
+          しかし Mac では TRELLIS.2 がメモリ要件で動作せず、SPAR3D しか選べなかった。
+          そこで専用の Windows/NVIDIA 機（RTX 4070 SUPER, VRAM 12GB）を用意し、
+          TRELLIS.2 を ComfyUI（visualbruno/ComfyUI-Trellis2）でローカル実行する経路へ移行した。
+          ジオメトリ品質が目に見えて向上し、フル PBR テクスチャを生成できる品質差も決め手
+          （出所: <code>.claude/skills/windows-image-to-3d/SKILL.md</code>、
+          <code>.claude/skills/mac-image-to-3d/SKILL.md</code>）。
+        </div>
+        <p>
+          <strong>やったこと。</strong><code>c6e47c9</code>（07-30）で hero を TRELLIS.2 生成メッシュ＋
+          16ボーンリグへ差し替え、<code>tools/trellis2/</code>（rotate180.py・run_comfyui.sh）を初追加、
+          スキル2本（glb-compression-pipeline・local-image-to-3d〔現 windows-image-to-3d〕）を追加。
+          <code>d3763d6</code> で月夜の釜を差し替え、<code>6003ccd</code> と <code>852158a</code> で
+          敵4体（chaser・shooter・thief・boss）をすべて差し替え。
+          <code>0f7ada2</code> で image-to-3d スキル〔現 mac-image-to-3d〕をリポジトリへ同梱した。
+        </p>
+        <p>
+          <strong>実測。</strong>FP8 量子化モデル（visualbruno/TRELLIS.2-4B-FP8、約8GBダウンロード）が
+          12GB VRAM に収まる。形状のみ約13分、PBR テクスチャ付き約16分/体（RTX 4070 SUPER）。
+          gltfpack 圧縮で生出力 24.6MB→1.85MB の実績。
+        </p>
+        <p>
+          <strong>帰結。</strong>TRELLIS.2/ComfyUI ローカルが新しい既定経路になった。
+        </p>
+
+        <h3 id="era-migration">3.6 全面移行（07-31）</h3>
+        <p>
+          <strong>やったこと。</strong><code>fc79506</code>（07-31）で月夜のポーション工房の
+          全35アセットを TRELLIS.2 で再生成。<code>tools/trellis2/comfy_generate.py</code>
+          （ComfyUI API 直叩きの生成）と <code>tools/trellis2/pack_for_game.py</code>
+          （gltfpack 圧縮＋配置）を追加し、生成→圧縮→配置がコマンド2本で通るようになった。
+        </p>
+        <p>
+          <strong>実測。</strong><code>models/</code> フォルダは 42MB→25MB
+          （出所: <code>trellis2_Babylon_moonlight-potion/game/assets/README.md</code>）。
+          12GB VRAM ではデコード時のピークで OOM しやすいため、連続生成は6点程度ずつに区切り
+          <code>/free</code> を挟む。形状が密で落ち続ける対象は <code>--no-cascade</code>
+          （1024 へのカスケードを外し 512 のままデコード）で通す。
+          テクスチャは接写・操作対象 1024²、飾り 512²。
+        </p>
+        <p>
+          <strong>帰結。</strong>現行パイプライン（§4）の完成形。
+        </p>
+
+        <h3 id="era-reorg">3.7 ディレクトリ再編と知見整備（08-16）</h3>
+        <p>
+          <strong>やったこと。</strong><code>56e2b24</code>（08-16）でサブプロジェクトを
+          <code>trellis2_Babylon_chrono-arena</code> / <code>trellis2_Babylon_moonlight-potion</code>
+          へリネーム。続く知見整備（feat/asset-knowledge-base）で、スキルを
+          mac-image-to-3d（旧 image-to-3d-asset。SPAR3D 期の内容・非推奨として保存）と
+          windows-image-to-3d（旧 local-image-to-3d。現行既定）の二本立てへ再編し、
+          <code>check-glb.mjs</code>・<code>gen-ref-image.sh</code> を <code>tools/</code> へ移設、
+          本ドキュメントと asset-pipeline-history スキル（更新運用）を新設した。
+        </p>
+      </section>
+
+      <section id="current">
+        <h2>4. 現行パイプライン（現在地）</h2>
+        <p>
+          既定は <strong>Windows/NVIDIA 機での TRELLIS.2（ComfyUI, FP8）</strong>。
+          参照画像1枚からゲーム配置までの流れは次のとおり。
+        </p>
+        <div class="flow">
+          <span>参照画像生成<br><code>tools/gen-ref-image.sh</code></span><em>→</em>
+          <span>3D 生成<br><code>tools/trellis2/comfy_generate.py</code></span><em>→</em>
+          <span>圧縮＋配置<br><code>tools/trellis2/pack_for_game.py</code></span><em>→</em>
+          <span>検証<br><code>node tools/check-glb.mjs</code></span>
+        </div>
+        <p>
+          コマンドの詳細・環境構築・トラブルシュートは本書には書かない。
+          生成環境は <code>.claude/skills/windows-image-to-3d/SKILL.md</code>、
+          gltfpack 圧縮の無音破壊トラップは <code>.claude/skills/glb-compression-pipeline/SKILL.md</code>、
+          容量予算と運用実測は <code>trellis2_Babylon_moonlight-potion/game/assets/README.md</code> を参照。
+        </p>
+      </section>
+
+      <section id="discontinued">
+        <h2>5. 打ち切った経路と理由</h2>
+        <p>同じ轍を踏まないための一覧。経路を打ち切ったら行を追加する（§7）。</p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>経路</th><th>何を試したか</th><th>打ち切り理由</th><th>証拠の所在</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>SPAR3D on Mac</td>
+                <td>月夜の全アセット生成、ねんどろいど5体の 3D 化（07-24〜29）</td>
+                <td>アルベド正規化・メッシュ断片化など精度に限界。TRELLIS.2 は Mac のメモリ要件で動かず、専用 Windows 機で TRELLIS.2 へ移行。経路自体は非推奨として保存</td>
+                <td><code>.claude/skills/mac-image-to-3d/SKILL.md</code>、<a href="../trellis2_Babylon_chrono-arena/docs/character-asset-pipeline.html">character-asset-pipeline.html</a> §5</td>
+              </tr>
+              <tr>
+                <td>写実系マテリアル参照画像</td>
+                <td>写実系参照画像から SPAR3D 生成。3方式（そのまま利用／単色ティント／参照画像投影）</td>
+                <td>テクスチャ白飛びで意匠が消え、実機で手組みモデルに及ばず。3方式すべて失敗</td>
+                <td><code>trellis2_Babylon_chrono-arena/.gitignore</code> の <code>materials/</code> コメント、character-asset-pipeline.html §8</td>
+              </tr>
+              <tr>
+                <td>Blender フル手組み</td>
+                <td>Chrono Arena 初期キャラ・プロップ（<code>1f7ad1b</code>）</td>
+                <td>品質基準としては優秀なまま残るが、キャラ制作は三面図→image-to-3D パイプライン（<code>580d118</code> 以降）へ移行</td>
+                <td>コミット履歴 <code>1f7ad1b</code> → <code>580d118</code> → <code>c6e47c9</code></td>
+              </tr>
+              <tr>
+                <td>クラウド image-to-3D</td>
+                <td>Hunyuan3D-2.0 HF Space（形状のみ成功）、Hunyuan3D-2.1（板状レリーフに縮退・2回再現）、TRELLIS 系 Space（GPU 実行段で失敗し続け全滅）、Meshy / Tripo（無料枠はエクスポート不可）</td>
+                <td>無料枠ではテクスチャ付き生成が不可。ローカル経路の確立で主経路としては不採用。Hunyuan3D-2.0 の形状のみ生成だけフォールバックとして記録保持</td>
+                <td><code>.claude/skills/mac-image-to-3d/references/cloud-fallback.md</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="docs-index">
+        <h2>6. 知見ドキュメント索引（ハブ）</h2>
+        <p>
+          アセット関連の知見がどこにあるかの一覧。知見をどこかへ書いたら、ここに1行追加する（必須。§7）。
+        </p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>場所</th><th>何が書いてあるか</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><a href="../trellis2_Babylon_chrono-arena/docs/character-asset-pipeline.html">trellis2_Babylon_chrono-arena/docs/character-asset-pipeline.html</a></td>
+                <td>三面図→リグ付きキャラの手順、実測の品質判定基準（輝度・非黒率・充填率）、落とし穴、16ボーンリグ設計、検証の作法</td>
+              </tr>
+              <tr>
+                <td><a href="../specs/potion-economy/implementation-notes.html">specs/potion-economy/implementation-notes.html</a></td>
+                <td>ポーション経済実装の判断記録と反省テンプレ</td>
+              </tr>
+              <tr>
+                <td><code>.claude/skills/windows-image-to-3d/SKILL.md</code></td>
+                <td>現行既定の生成環境。TRELLIS.2/ComfyUI の構築、CUDA/DLL デバッグ、FP8・12GB VRAM 運用</td>
+              </tr>
+              <tr>
+                <td><code>.claude/skills/mac-image-to-3d/SKILL.md</code></td>
+                <td>旧 SPAR3D 経路（非推奨・保存）。参照画像の定型、検証・減量・量産のコツ。references/ に spar3d-setup / cloud-fallback / integration</td>
+              </tr>
+              <tr>
+                <td><code>.claude/skills/glb-compression-pipeline/SKILL.md</code></td>
+                <td>gltfpack→Babylon.js の無音破壊トラップ（KHR_texture_transform 等）、GLB の中身の確認法、再パック運用</td>
+              </tr>
+              <tr>
+                <td><code>.claude/skills/asset-pipeline-history/SKILL.md</code></td>
+                <td>本ドキュメントの更新運用（いつ・何を・どこに書くか）</td>
+              </tr>
+              <tr>
+                <td><code>trellis2_Babylon_moonlight-potion/game/assets/README.md</code></td>
+                <td>容量予算（釜 3MB・小物 1MB・全体 10MB）、生成実測（42MB→25MB、6点区切り、--no-cascade）</td>
+              </tr>
+              <tr>
+                <td><code>.claude/skills/mac-image-to-3d/references/integration.md</code></td>
+                <td>生成器非依存の Babylon 組込知見（bbox 正規化・config 駆動＋フォールバック・クローン配置）。SPAR3D 期の産物だが<strong>現役</strong></td>
+              </tr>
+              <tr>
+                <td><code>.gitignore</code>（ルート）／ <code>trellis2_Babylon_chrono-arena/.gitignore</code></td>
+                <td>中間生成物の追跡方針と、経路打ち切りの証拠コメント（写実系マテリアル打ち切り等）</td>
+              </tr>
+              <tr>
+                <td><code>tools/*</code> スクリプトヘッダ群</td>
+                <td><code>check-glb.mjs</code>（検証項目と bbox 算出の設計判断）、<code>gen-ref-image.sh</code>（参照画像の定型）、<code>trellis2/comfy_generate.py</code>・<code>trellis2/pack_for_game.py</code>（生成・圧縮の前提）、<code>serve.py</code>（no-store の理由）。各ヘッダコメントが一次資料</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="howto-append">
+        <h2>7. 追記の仕方</h2>
+        <p>
+          発火条件・証拠要件・置き場の判定は
+          <code>.claude/skills/asset-pipeline-history/SKILL.md</code> が正本。
+          本書へ追記するときは次のテンプレを使う。
+        </p>
+        <h3>§3 への時系列追記テンプレ</h3>
+        <pre><code>&lt;h3 id="era-XXX"&gt;3.N 経路名（MM-DD）&lt;/h3&gt;
+動機: なぜ試したか
+やったこと: コミット hash と内容（git log --oneline -1 で確定してから書く）
+実測・学び: 単位付きの数値（「速い/大きい」だけの形容は不可）
+乗換/打ち切り理由: 何が閾値に届かなかったか＋証拠の所在（ファイルパス）</code></pre>
+        <h3>ルール</h3>
+        <ul>
+          <li>§3 は時系列 append のみ。既存節の書き換えは事実誤りの訂正に限り、訂正は日付付き note で行う</li>
+          <li>経路を打ち切ったら §5 の表に1行追加（試したこと・理由・証拠の所在の3点セット）</li>
+          <li>知見を<strong>どこに書いた場合でも</strong> §6 の索引へ1行追加する（必須）</li>
+          <li>詳細は1箇所にだけ書き、他は参照で繋ぐ。本書に手順詳細・実測表を複製しない</li>
+          <li>反映後は <code>python3 tools/serve.py 4173</code> で目視し、リンク切れを確認する</li>
+        </ul>
+      </section>
+
+      <footer>
+        57_babylon — アセットパイプライン変遷史 / 2026-08-16 作成
+      </footer>
+    </main>
+  </body>
+</html>

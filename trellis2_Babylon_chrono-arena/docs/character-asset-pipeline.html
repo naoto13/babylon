@@ -208,8 +208,8 @@ cp assets/production/demonic/spar3d-nendo/&lt;name&gt;-nendo-front.glb \
 blender --background --factory-startup --python-exit-code 1 \
   --python scripts/rig_nendo_character.py -- &lt;name&gt;-nendo
 
-# 6. 検証
-node ~/.claude/skills/image-to-3d-asset/scripts/check-glb.mjs \
+# 6. 検証（check-glb.mjs はリポジトリルートの tools/ にある）
+node tools/check-glb.mjs \
   assets/production/demonic/rigged/&lt;name&gt;-nendo-rigged.glb</code></pre>
 
         <div class="note">
@@ -475,6 +475,13 @@ pathlib.Path('shot.png').write_bytes(base64.b64decode(b64))
           ねんどろいど版はまだ組み込んでいない。シーン側には IBL・ACES トーンマッピング・
           SSAO・リムライトを導入済みで、これは新旧どちらのモデルにも効く。
         </p>
+
+        <div class="note">
+          <strong>2026-08-16 追記:</strong> その後、hero と敵4体の計5体すべてが
+          TRELLIS.2 生成版へ移行済み（<code>852158a</code>、<code>src/main.js</code> の
+          <code>*-nendo-trellis2.glb</code> 参照）。経緯は
+          <a href="../../docs/asset-pipeline-history.html">アセットパイプライン変遷史</a>を参照。
+        </div>
 
         <h3>残課題</h3>
         <ul>

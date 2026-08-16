@@ -240,7 +240,7 @@ TITLE → NIGHT_INTRO → ORDER（受付・観察・質問1問）
 ### 11.1 ファイル構成（ビルド不要・静的配信）
 
 ```text
-moonlit-potion-workshop/game/
+trellis2_Babylon_moonlight-potion/game/
   index.html        # canvas + DOM オーバーレイ UI
   style.css
   package.json      # {"type":"module"} のみ（node --test 用のモジュール解決マーカー）

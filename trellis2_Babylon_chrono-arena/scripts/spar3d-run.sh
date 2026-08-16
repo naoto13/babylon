@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPAR3D で参照画像から テクスチャ付き glb を生成する（Chrono Arena 用ラッパー）。
+# 【非推奨】SPAR3D は精度限界のため非推奨。現行は windows-image-to-3d スキル（TRELLIS.2）。
 #
 #   scripts/spar3d-run.sh <出力ディレクトリ> <参照画像.png> [参照画像2.png ...]
 #
@@ -14,7 +15,7 @@
 # 渡せないため、ここでは run.py を直接呼ぶ。
 set -euo pipefail
 
-SPAR3D_DIR="${SPAR3D_DIR:-/Users/ny/orca/workspaces/57_babylon/magic/tools/spar3d}"
+SPAR3D_DIR="${SPAR3D_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/tools/spar3d}"
 REPO_DIR="$SPAR3D_DIR/repo"
 VENV_DIR="$SPAR3D_DIR/venv"
 TEXRES="${TEXRES:-1024}"

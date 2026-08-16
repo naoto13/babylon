@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# 【非推奨】Mac (Apple Silicon / MPS) 専用の SPAR3D 実行ラッパー。
+# SPAR3D は精度限界のため非推奨。現行のアセット生成は windows-image-to-3d スキル
+# （専用 Windows/NVIDIA 機の TRELLIS.2/ComfyUI）を使うこと。
+# 経緯の詳細: docs/asset-pipeline-history.html
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
@@ -6,7 +10,7 @@ if [[ $# -ne 2 ]]; then
   exit 64
 fi
 
-SPAR3D_DIR="/Users/ny/orca/workspaces/57_babylon/magic/tools/spar3d"
+SPAR3D_DIR="${SPAR3D_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 REPO_DIR="$SPAR3D_DIR/repo"
 VENV_DIR="$SPAR3D_DIR/venv"
 
@@ -32,7 +36,7 @@ else
   OUTPUT_DIR="$PWD/$2"
 fi
 export PYTORCH_ENABLE_MPS_FALLBACK=1
-export HF_HOME="/Users/ny/orca/workspaces/57_babylon/magic/tools/spar3d/hf-cache"
+export HF_HOME="$SPAR3D_DIR/hf-cache"
 unset SPAR3D_LOW_VRAM
 
 if [[ -f /tmp/hf_token ]]; then

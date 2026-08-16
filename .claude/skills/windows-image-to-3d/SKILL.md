@@ -1,6 +1,6 @@
 ---
-name: local-image-to-3d
-description: How to set up, debug, and run local image-to-3D asset generation on this Windows/NVIDIA machine using TRELLIS.2 in ComfyUI, replacing the broken SPAR3D path at tools/spar3d/run-spar3d.sh (hardcoded to macOS/MPS, does not run here). Use this whenever the user asks to set up or fix local 3D generation, mentions SPAR3D/TRELLIS/TRELLIS.2/ComfyUI in the context of this repo, wants to generate or regenerate a game asset (cauldron, props, dress-* items) from a reference image, or hits GPU/CUDA/driver/torch errors while doing AI 3D generation work here. Also consult this before recommending a cloud service (Meshy/Tripo) as the only option — a working local pipeline already exists once set up.
+name: windows-image-to-3d
+description: How to set up, debug, and run local image-to-3D asset generation on the dedicated Windows/NVIDIA machine using TRELLIS.2 in ComfyUI — the current default asset-generation path for this repo, replacing the deprecated Mac/SPAR3D path (see the mac-image-to-3d skill; tools/spar3d/run-spar3d.sh is hardcoded to macOS/MPS and does not run here). Use this whenever the user asks to set up or fix local 3D generation, mentions SPAR3D/TRELLIS/TRELLIS.2/ComfyUI in the context of this repo, wants to generate or regenerate a game asset (cauldron, props, dress-* items) from a reference image, or hits GPU/CUDA/driver/torch errors while doing AI 3D generation work here. Also consult this before recommending a cloud service (Meshy/Tripo) as the only option — a working local pipeline already exists once set up.
 ---
 
 # Local image-to-3D generation (TRELLIS.2 on Windows/NVIDIA)
@@ -88,7 +88,7 @@ This machine had no Node/npm/pnpm at all, which blocks this repo's documented as
 
 Workarounds that don't require installing Node.js just for one tool:
 - **gltfpack**: download the standalone Windows binary directly from `github.com/zeux/meshoptimizer/releases` (a small zip) instead of going through `pnpm dlx`.
-- **Serving the static game locally**: `python -m http.server <port>` from whatever Python you set up above works fine — the game (`moonlit-potion-workshop/game/`) is plain static files with no build step.
+- **Serving the static game locally**: `python -m http.server <port>` from whatever Python you set up above works fine — the game (`trellis2_Babylon_moonlight-potion/game/`) is plain static files with no build step.
 
 ### gltfpack settings that hit this project's asset budgets
 
@@ -120,7 +120,7 @@ The working environment lives under `tools/trellis2/` and is fully gitignored (`
 
 ## Committing generated assets back into the game
 
-When a regenerated asset is ready to replace a file under `moonlit-potion-workshop/game/assets/models/`:
+When a regenerated asset is ready to replace a file under `trellis2_Babylon_moonlight-potion/game/assets/models/`:
 1. Back up the original first.
 2. Check the resulting file size against this project's documented budgets in `assets/README.md` before committing.
 3. Stage files explicitly (`git add <file> <file>`), never `git add -A` — this repo's local tooling directories sit right next to the asset folders and a blanket add can easily sweep in gigabytes of unrelated local environment files.

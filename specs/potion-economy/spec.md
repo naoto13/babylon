@@ -95,9 +95,9 @@ economy: {
 
 ## Cross-References
 
-- `moonlit-potion-workshop/SPEC.md` §§5, 8–11
-- `moonlit-potion-workshop/game/js/data.js`
-- `moonlit-potion-workshop/game/js/engine.js`
-- `moonlit-potion-workshop/game/js/save.js`
-- `moonlit-potion-workshop/game/js/main.js`
-- `moonlit-potion-workshop/game/js/scene.js`
+- `trellis2_Babylon_moonlight-potion/SPEC.md` §§5, 8–11
+- `trellis2_Babylon_moonlight-potion/game/js/data.js`
+- `trellis2_Babylon_moonlight-potion/game/js/engine.js`
+- `trellis2_Babylon_moonlight-potion/game/js/save.js`
+- `trellis2_Babylon_moonlight-potion/game/js/main.js`
+- `trellis2_Babylon_moonlight-potion/game/js/scene.js`

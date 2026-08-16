@@ -129,7 +129,7 @@ exec python run.py "$INPUT" --output-dir "$OUTPUT" --device mps --texture-resolu
 
 ```bash
 $ROOT/run-spar3d.sh <参照画像.png> $ROOT/output
-node <skill>/scripts/check-glb.mjs $ROOT/output/0/mesh.glb
+node tools/check-glb.mjs $ROOT/output/0/mesh.glb   # リポジトリルートで実行
 ```
 
 `TEXCOORD_0` と images が1枚以上あれば成功。
