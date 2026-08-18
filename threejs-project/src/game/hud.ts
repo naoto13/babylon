@@ -1,6 +1,6 @@
 // HUD: HP/XP バー、統計チップ、レベルアップ 3 択、ゲームオーバー画面
 // apple-design 原則: 半透明マテリアル + restraint、変化した値だけ DOM 更新
-import type { Upgrade } from './upgrades';
+import type { UpgradeChoice } from './upgrades';
 
 export interface HudView {
   hp: number;
@@ -84,7 +84,7 @@ export class Hud {
   }
 
   /** レベルアップ 3 択。onPick は一度だけ呼ばれる */
-  showLevelUp(options: Upgrade[], onPick: (index: number) => void): void {
+  showLevelUp(options: UpgradeChoice[], onPick: (index: number) => void): void {
     this.clearKeyHandler();
     let picked = false;
     const pick = (i: number) => {

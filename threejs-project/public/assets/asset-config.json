@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "assets": {
+    "player": {
+      "file": "player_squid",
+      "source": "glb",
+      "scale": 1,
+      "rotX": 45,
+      "rotY": 180,
+      "offsetY": 0
+    },
+    "blob": {
+      "file": "enemy_blob",
+      "source": "glb",
+      "scale": 1.1,
+      "rotX": 0,
+      "rotY": 0,
+      "offsetY": 0
+    },
+    "dart": {
+      "file": "enemy_dart",
+      "source": "glb",
+      "scale": 1.15,
+      "rotX": 0,
+      "rotY": 90,
+      "offsetY": 0
+    },
+    "tank": {
+      "file": "enemy_tank",
+      "source": "glb",
+      "scale": 1,
+      "rotX": 0,
+      "rotY": 0,
+      "offsetY": 0
+    }
+  },
+  "weapons": {
+    "shot": {
+      "fireInterval": 0.5,
+      "damage": 2,
+      "projectileSpeed": 16,
+      "projectileLife": 1.4,
+      "splashRadius": 0.75
+    },
+    "bomb": {
+      "fireInterval": 2.6,
+      "damage": 5,
+      "throwSpeed": 11,
+      "blastRadius": 2.4
+    },
+    "spinner": {
+      "fireInterval": 0.09,
+      "damage": 0.7,
+      "projectileSpeed": 22,
+      "projectileLife": 0.7,
+      "spreadDeg": 16
+    }
+  }
+}

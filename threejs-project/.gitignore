@@ -2,3 +2,5 @@ node_modules/
 dist/
 verify/
 *.log
+.img2threejs/
+proc-preview.html

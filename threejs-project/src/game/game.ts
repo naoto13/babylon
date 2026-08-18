@@ -4,16 +4,27 @@ import {
   ARENA_SIZE, ARENA_HALF, PLAY_HALF, CAMERA, COLORS, PLAYER, WEAPON,
   ENEMY_TYPES, spawnInterval, spawnBatch, enemyHpMul, enemySpeedMul, xpForLevel,
 } from './config';
+import {
+  DEFAULT_ASSET_CONFIG, type AssetConfig, type AssetKey, type AssetSource,
+} from './asset-config';
+import { rotatedGeometry, rotatedObject, type LoadedModels } from './assets';
+import { PROC_BUILDERS } from './procedural';
 import { Input } from './input';
 import { InkGround } from './ink';
 import { Player } from './player';
 import { Enemies } from './enemies';
-import { Projectiles } from './projectiles';
+import { Projectiles, type BombSlot } from './projectiles';
 import { Gems } from './gems';
+import { Effects } from './effects';
 import { Hud } from './hud';
-import { rollUpgrades, type Mods, type Upgrade, type UpgradeCtx } from './upgrades';
+import {
+  rollUpgrades, findUpgrade,
+  type Mods, type UpgradeChoice, type UpgradeCtx, type WeaponLevels,
+} from './upgrades';
 
 export type GameState = 'playing' | 'levelup' | 'gameover';
+
+const DEG2RAD = Math.PI / 180;
 
 export class Game implements UpgradeCtx {
   readonly scene = new THREE.Scene();
@@ -24,6 +35,7 @@ export class Game implements UpgradeCtx {
   readonly enemies: Enemies;
   readonly projectiles: Projectiles;
   readonly gems: Gems;
+  readonly effects: Effects;
   readonly ink: InkGround;
   readonly hud: Hud;
 
@@ -35,29 +47,41 @@ export class Game implements UpgradeCtx {
   xpNext = xpForLevel(1);
   hp: number = PLAYER.maxHp;
   maxHp: number = PLAYER.maxHp;
-  mods: Mods = {
-    fireInterval: WEAPON.fireInterval,
-    damage: WEAPON.damage,
-    projectileCount: WEAPON.projectileCount,
-    moveSpeed: PLAYER.moveSpeed,
-    splashRadius: WEAPON.splashRadius,
-    magnetRadius: WEAPON.magnetRadius,
-  };
+  assetCfg: AssetConfig;
+  mods: Mods;
+  weapons: WeaponLevels = { bomb: 0, spinner: 0 };
+  /** 反映済みモデル（デバッグ/検証用） */
+  modelStatus: Record<AssetKey, boolean> = { player: false, blob: false, dart: false, tank: false };
+  /** 実効ソース（設定と資産の有無から解決した結果。デバッグ/検証用） */
+  activeSources: Record<AssetKey, AssetSource> = { player: 'fallback', blob: 'fallback', dart: 'fallback', tank: 'fallback' };
+  private loadedModels: LoadedModels = {};
+  /** 適用済み rotX（変化したアセットのみ再ベイクする） */
+  private appliedRotX: Partial<Record<AssetKey, number>> = {};
+  /** 適用済み実効ソース */
+  private appliedSource: Partial<Record<AssetKey, AssetSource>> = {};
+  /** rotX ベイクで生成した geometry（差し替え時に dispose する） */
+  private bakedGeos: Partial<Record<AssetKey, THREE.BufferGeometry>> = {};
 
   private clock = new THREE.Clock();
   private spawnTimer = 1;
   private fireTimer = 0.4;
+  private bombTimer = 1;
+  private spinnerTimer = 0.3;
   private invincibleTimer = 0;
   private pendingLevelUps = 0;
   private cameraOffset = new THREE.Vector3(0, CAMERA.offsetY, CAMERA.offsetZ);
   private forcedInvincible = false;
-  private currentChoices: Upgrade[] = [];
+  private currentChoices: UpgradeChoice[] = [];
+  /** config 変更時に基礎値へ再適用するための恒久アップグレード履歴 */
+  private upgradeLog: string[] = [];
   // FPS 計測
   private frameCount = 0;
   private fpsWindowStart = performance.now();
   fps = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, assetCfg: AssetConfig = DEFAULT_ASSET_CONFIG) {
+    this.assetCfg = assetCfg;
+    this.mods = this.baseMods();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -81,8 +105,10 @@ export class Game implements UpgradeCtx {
     this.enemies = new Enemies(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.gems = new Gems(this.scene);
+    this.effects = new Effects(this.scene);
     this.hud = new Hud(document.getElementById('hud-root')!);
 
+    this.applyTuning();
     this.input.attach();
     window.addEventListener('resize', this.onResize);
   }
@@ -111,6 +137,123 @@ export class Game implements UpgradeCtx {
     this.renderer.setAnimationLoop(this.tick);
   }
 
+  // ---- アセット設定 ----
+
+  /** config の武器基礎値から初期 mods を作る */
+  private baseMods(): Mods {
+    const shot = this.assetCfg.weapons.shot;
+    return {
+      fireInterval: shot.fireInterval,
+      damage: shot.damage,
+      projectileCount: WEAPON.projectileCount,
+      moveSpeed: PLAYER.moveSpeed,
+      splashRadius: shot.splashRadius,
+      magnetRadius: WEAPON.magnetRadius,
+    };
+  }
+
+  /** 基礎値を差し替えて恒久アップグレードを再適用（admin からの変更に即応する） */
+  private rederiveMods(): void {
+    this.mods = this.baseMods();
+    this.weapons = { bomb: 0, spinner: 0 };
+    for (const id of this.upgradeLog) {
+      findUpgrade(id)?.apply(this);
+    }
+  }
+
+  /** モデル位置・スケール調整を player/enemies へ反映 */
+  private applyTuning(): void {
+    const a = this.assetCfg.assets;
+    this.player.setTuning(a.player.scale, a.player.rotY * DEG2RAD, a.player.offsetY);
+    for (const type of ENEMY_TYPES) {
+      const t = a[type.id];
+      this.enemies.setTypeTuning(type.id, { scale: t.scale, rotY: t.rotY * DEG2RAD, offsetY: t.offsetY });
+    }
+  }
+
+  /** admin タブからの localStorage 変更・起動時の設定読み込みを反映 */
+  applyConfig(cfg: AssetConfig): void {
+    this.assetCfg = cfg;
+    this.rederiveMods();
+    this.applyTuning();
+    this.refreshModelBakes(false);
+  }
+
+  /** glb ロード結果を反映（失敗したアセットはフォールバック継続） */
+  applyModels(models: LoadedModels): void {
+    this.loadedModels = models;
+    this.refreshModelBakes(true);
+  }
+
+  /** 設定 source と資産の有無から実効ソースを解決（無いものは fallback へ縮退） */
+  private resolveSource(key: AssetKey): AssetSource {
+    const want = this.assetCfg.assets[key].source;
+    if (want === 'glb') {
+      const m = this.loadedModels[key];
+      const usable = key === 'player' ? !!m : !!(m && m.geometry && m.material);
+      return usable ? 'glb' : 'fallback';
+    }
+    if (want === 'procedural') return PROC_BUILDERS[key] ? 'procedural' : 'fallback';
+    return 'fallback';
+  }
+
+  /** source / rotX を正規化済みモデルへ反映（変化時のみ再ベイク） */
+  private refreshModelBakes(force: boolean): void {
+    let enemyMeshChanged = false;
+    // ---- player: Object3D 差し替え ----
+    const src = this.resolveSource('player');
+    const playerRotX = this.assetCfg.assets.player.rotX;
+    if (force || this.appliedSource.player !== src || (src === 'glb' && this.appliedRotX.player !== playerRotX)) {
+      this.appliedSource.player = src;
+      this.appliedRotX.player = playerRotX;
+      const model = this.loadedModels.player;
+      if (src === 'glb' && model) {
+        this.player.setModel(rotatedObject(model.object, playerRotX), 'full');
+      } else if (src === 'procedural') {
+        // 手続きモデルは正規化済み（接地/+Z正面）: rotX/rotY/offsetY 補正は掛けない。
+        // +Z 正面 → ゲーム規約の -Z 前方への 180° はエンジン側でベイクする（cfg 非依存）
+        const obj = rotatedObject(PROC_BUILDERS.player!(), 0);
+        obj.rotation.y = Math.PI;
+        this.player.setModel(obj, 'scale-only');
+      } else {
+        this.player.setModel(null);
+      }
+      this.activeSources.player = src;
+      this.modelStatus.player = src === 'glb';
+    }
+    // ---- enemies: per-type InstancedMesh ----
+    for (const type of ENEMY_TYPES) {
+      const eSrc = this.resolveSource(type.id);
+      const rotX = this.assetCfg.assets[type.id].rotX;
+      if (!force && this.appliedSource[type.id] === eSrc && (eSrc !== 'glb' || this.appliedRotX[type.id] === rotX)) {
+        continue;
+      }
+      this.appliedSource[type.id] = eSrc;
+      this.appliedRotX[type.id] = rotX;
+      const m = this.loadedModels[type.id];
+      if (eSrc === 'glb' && m && m.geometry && m.material) {
+        const baked = rotatedGeometry(m.geometry, rotX);
+        this.enemies.setTypeModel(type.id, baked, m.material);
+        const prev = this.bakedGeos[type.id];
+        if (prev && prev !== m.geometry && prev !== baked) prev.dispose();
+        this.bakedGeos[type.id] = baked;
+      } else {
+        this.enemies.removeTypeModel(type.id);
+        const prev = this.bakedGeos[type.id];
+        if (prev && prev !== m?.geometry) prev.dispose();
+        delete this.bakedGeos[type.id];
+      }
+      this.activeSources[type.id] = eSrc;
+      this.modelStatus[type.id] = eSrc === 'glb';
+      enemyMeshChanged = true;
+    }
+    // levelup/gameover 中は update が回らず新 InstancedMesh が count=0 のままになるため、
+    // dt=0 の update で行列/カウントを 1 回再書込して表示を維持する（移動・被弾進行なし）
+    if (enemyMeshChanged && this.state !== 'playing') {
+      this.enemies.update(0, this.player.x, this.player.z, this.player.radius, this.elapsed);
+    }
+  }
+
   private onResize = (): void => {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
@@ -121,6 +264,7 @@ export class Game implements UpgradeCtx {
     // タブ非表示復帰などの巨大 dt を抑制
     const dt = Math.min(this.clock.getDelta(), 0.05);
     if (this.state === 'playing') this.update(dt);
+    this.effects.update(dt);
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
     this.hud.update({
@@ -177,9 +321,15 @@ export class Game implements UpgradeCtx {
       this.fireTimer = this.mods.fireInterval;
       this.fireVolley();
     }
+    this.updateBomb(dt);
+    this.updateSpinner(dt);
 
     // --- 弾更新 & 衝突 ---
-    this.projectiles.update(dt, (x, z) => this.ink.splat(x, z, 0.55));
+    this.projectiles.update(
+      dt,
+      (x, z) => this.ink.splat(x, z, 0.55),
+      (b) => this.explodeBomb(b)
+    );
     for (const p of this.projectiles.slots) {
       if (!p.active) continue;
       const hit = this.enemies.queryHit(p.x, p.z, 0.25);
@@ -195,6 +345,7 @@ export class Game implements UpgradeCtx {
   }
 
   private fireVolley(): void {
+    const shot = this.assetCfg.weapons.shot;
     const count = this.mods.projectileCount;
     const targets = this.enemies.nearest(this.player.x, this.player.z, count);
     for (let i = 0; i < count; i++) {
@@ -220,9 +371,75 @@ export class Game implements UpgradeCtx {
       }
       this.projectiles.fire(
         this.player.x, this.player.z, dx, dz,
-        WEAPON.projectileSpeed, WEAPON.projectileLife, this.mods.damage, this.mods.splashRadius
+        shot.projectileSpeed, shot.projectileLife, this.mods.damage, this.mods.splashRadius
       );
     }
+  }
+
+  // ---- スプラッシュボム（放物線 → 範囲爆発） ----
+
+  private updateBomb(dt: number): void {
+    if (this.weapons.bomb <= 0) return;
+    this.bombTimer -= dt;
+    if (this.bombTimer > 0 || this.enemies.activeCount === 0) return;
+    const lvl = this.weapons.bomb;
+    const cfg = this.assetCfg.weapons.bomb;
+    this.bombTimer = cfg.fireInterval * Math.pow(0.88, lvl - 1);
+    const targets = this.enemies.nearest(this.player.x, this.player.z, 1);
+    if (targets.length === 0) return;
+    const t = this.enemies.slots[targets[0]];
+    const damage = cfg.damage * (1 + 0.45 * (lvl - 1));
+    const radius = cfg.blastRadius * (1 + 0.16 * (lvl - 1));
+    this.projectiles.fireBomb(
+      this.player.x, this.player.z,
+      t.x + (Math.random() - 0.5) * 1.2, t.z + (Math.random() - 0.5) * 1.2,
+      cfg.throwSpeed, damage, radius
+    );
+  }
+
+  private explodeBomb(b: BombSlot): void {
+    // 大スプラット + 爆発リング
+    this.ink.splat(b.x, b.z, b.blastRadius * 1.15);
+    this.effects.ring(b.x, b.z, b.blastRadius, COLORS.projectile);
+    // 範囲内の敵へフルダメージ
+    for (let i = 0; i < this.enemies.slots.length; i++) {
+      const s = this.enemies.slots[i];
+      if (!s.active) continue;
+      if (Math.hypot(s.x - b.x, s.z - b.z) < b.blastRadius + s.radius) {
+        if (this.enemies.applyDamage(i, b.damage)) this.killEnemy(i);
+      }
+    }
+  }
+
+  // ---- スピナー（高速拡散連射） ----
+
+  private updateSpinner(dt: number): void {
+    if (this.weapons.spinner <= 0) return;
+    this.spinnerTimer -= dt;
+    if (this.spinnerTimer > 0 || this.enemies.activeCount === 0) return;
+    const lvl = this.weapons.spinner;
+    const cfg = this.assetCfg.weapons.spinner;
+    this.spinnerTimer = cfg.fireInterval * Math.pow(0.85, lvl - 1);
+    const targets = this.enemies.nearest(this.player.x, this.player.z, 1);
+    if (targets.length === 0) return;
+    const t = this.enemies.slots[targets[0]];
+    let dx = t.x - this.player.x;
+    let dz = t.z - this.player.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-4) return;
+    dx /= len;
+    dz /= len;
+    const spread = (Math.random() - 0.5) * 2 * cfg.spreadDeg * DEG2RAD;
+    const cos = Math.cos(spread);
+    const sin = Math.sin(spread);
+    const nx = dx * cos - dz * sin;
+    const nz = dx * sin + dz * cos;
+    const damage = cfg.damage * (1 + 0.35 * (lvl - 1));
+    this.projectiles.fire(
+      this.player.x, this.player.z, nx, nz,
+      cfg.projectileSpeed, cfg.projectileLife, damage, 0,
+      'spinner', 0.7
+    );
   }
 
   private hitEnemy(index: number, damage: number, hx: number, hz: number, splash: number): void {
@@ -248,6 +465,7 @@ export class Game implements UpgradeCtx {
     if (!s.active) return;
     this.kills++;
     this.ink.splat(s.x, s.z, s.splatRadius);
+    this.effects.pop(s.x, s.z, s.color, s.scale); // 撃破ポップ演出
     this.gems.spawn(s.x, s.z, s.xp);
     this.enemies.release(index);
   }
@@ -284,6 +502,7 @@ export class Game implements UpgradeCtx {
     const u = this.currentChoices[index];
     if (!u) return;
     u.apply(this);
+    if (!u.transient) this.upgradeLog.push(u.id); // config 変更時の再適用用
     this.currentChoices = [];
     this.pendingLevelUps--;
     if (this.pendingLevelUps > 0) {
@@ -310,16 +529,13 @@ export class Game implements UpgradeCtx {
     this.xp = 0;
     this.xpNext = xpForLevel(1);
     this.hp = this.maxHp;
-    this.mods = {
-      fireInterval: WEAPON.fireInterval,
-      damage: WEAPON.damage,
-      projectileCount: WEAPON.projectileCount,
-      moveSpeed: PLAYER.moveSpeed,
-      splashRadius: WEAPON.splashRadius,
-      magnetRadius: WEAPON.magnetRadius,
-    };
+    this.upgradeLog = [];
+    this.mods = this.baseMods();
+    this.weapons = { bomb: 0, spinner: 0 };
     this.spawnTimer = 1;
     this.fireTimer = 0.4;
+    this.bombTimer = 1;
+    this.spinnerTimer = 0.3;
     this.invincibleTimer = 0;
     this.pendingLevelUps = 0;
     this.currentChoices = [];
@@ -329,6 +545,7 @@ export class Game implements UpgradeCtx {
     this.enemies.reset();
     this.projectiles.reset();
     this.gems.reset();
+    this.effects.reset();
     this.ink.reset();
     // levelup 中の restart でもキーハンドラを残留させない
     this.hud.cancelOverlay();
@@ -370,6 +587,30 @@ export class Game implements UpgradeCtx {
 
   debugLevelUp(): void {
     this.gainXp(this.xpNext - this.xp);
+  }
+
+  /**
+   * デバッグ: rAF に依存せずゲームを決定的に進める（orca パネル非表示でも検証可能にする）。
+   * 通常プレイのループとは独立で、挙動は update/effects の呼び出しのみ。
+   */
+  debugStep(seconds: number): void {
+    let remain = Math.max(0, Math.min(120, Number(seconds) || 0));
+    const step = 1 / 60;
+    while (remain > 0) {
+      const dt = Math.min(step, remain);
+      if (this.state === 'playing') this.update(dt);
+      this.effects.update(dt);
+      this.updateCamera(dt);
+      remain -= dt;
+    }
+  }
+
+  /** デバッグ: 武器レベルを直接設定（検証用。upgradeLog にも反映して再適用に耐える） */
+  debugSetWeaponLevel(id: 'bomb' | 'spinner', level: number): void {
+    const lvl = Math.max(0, Math.min(4, Math.floor(Number(level) || 0)));
+    this.upgradeLog = this.upgradeLog.filter((u) => u !== id);
+    for (let i = 0; i < lvl; i++) this.upgradeLog.push(id);
+    this.rederiveMods();
   }
 
   setInvincible(on: boolean): void {
