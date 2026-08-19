@@ -3,7 +3,7 @@ name: image-to-3d-asset-trellis2
 description: >
   【明示コマンド専用 — 自動発火しない】/image-to-3d-asset-trellis2 で実行されたときだけ使う。
   Windows/NVIDIA マシンで TRELLIS.2 (ComfyUI) により参照画像から高品質 glb を生成する経路。
-  セットアップ・CUDA/driver/torch のデバッグ・FP8 モデル・gltfpack 減量までの実測知見を含む。
+  セットアップ・FP8 モデル・gltfpack 減量までの実測知見を含む。CUDA/driver/torch の環境デバッグ知見は windows-cuda-debug スキル参照。
   3D生成の話題が出ただけでは発火しない。macOS では /image-to-3d-asset-spar3d を使う。
 disable-model-invocation: true
 argument-hint: '[生成したいアセットの説明 or 参照画像パス]'
@@ -17,14 +17,9 @@ argument-hint: '[生成したいアセットの説明 or 参照画像パス]'
 
 Everything below was learned by hitting the problem, not by reading docs — trust it over generic ComfyUI/PyTorch advice you might otherwise reach for.
 
-## Before touching anything: check the GPU driver, not just the toolkit
+## GPU/CUDA/torch environment debugging
 
-Run `nvidia-smi` and read the **"CUDA Version"** field in the header — that's the max CUDA your *driver* supports, which is what actually matters for `torch.cuda.is_available()`. Two things trip people up here:
-
-1. **Installing the CUDA Toolkit (nvcc) does not update the GPU driver.** They're separate installers. It's entirely possible to have `nvcc --version` report CUDA 13.x while the actual display driver still only supports CUDA 12.6 — in that state, any torch build newer than what the driver supports silently reports `cuda.is_available() == False` with `cudaErrorNotSupported`, and nothing in the Python error tells you the driver is the culprit.
-2. **After a driver update, verify with more than one tool.** Cross-check `nvidia-smi`'s reported version against PowerShell: `Get-CimInstance Win32_VideoController | Select-Object DriverVersion,DriverDate`. If a user says they updated the driver but `nvidia-smi` looks unchanged, it's worth asking them to actually reboot — driver replacement often doesn't take effect until then even though the installer reports success.
-
-Pick your ComfyUI/PyTorch CUDA build (cu121/cu124/cu126/cu128/cu130/...) to match what the driver *currently* reports, not the newest thing available. If the user later updates their driver, newer builds become viable — recheck rather than assuming yesterday's answer still holds.
+Environment-level failures (driver vs toolkit mismatch, pip silently downgrading GPU torch to CPU, `.pyd` DLL load failures, HF WinError 123 masking gated-repo 403s) are documented in the **windows-cuda-debug** skill (`.claude/skills/windows-cuda-debug/SKILL.md`) — read that first when `torch.cuda.is_available()` is False or a CUDA extension fails to import. One habit worth keeping in mind here: match your ComfyUI/PyTorch cuXXX build to what `nvidia-smi`'s header *currently* reports, not the newest build available.
 
 ## Python environment: don't trust `python` on PATH, and watch Python-version drift
 
@@ -32,45 +27,6 @@ Pick your ComfyUI/PyTorch CUDA build (cu121/cu124/cu126/cu128/cu130/...) to matc
 - **ComfyUI's official "Windows Portable" build bundles its own embedded Python + PyTorch, and that version drifts over time** (it was Python 3.13 + torch cu130 when this was built). A custom node's precompiled wheels are tied to specific `cpXXX` tags (e.g. cp311/cp312 only) — if the portable build's Python is newer than the wheels support, the wheels simply won't install, and the portable build is a dead end for that node no matter what else you try.
   - **Check the node's wheel filenames for their `cpXXX` tag BEFORE deciding between the portable build and a hand-built venv.** If there's a mismatch, skip the portable zip entirely: install a matching Python version yourself, `python -m venv`, then `git clone` ComfyUI from source (much smaller than the portable download and gives you full control of the Python version) instead of fighting the portable build's fixed interpreter.
   - Check `download.pytorch.org/whl/<cuXXX>/` for what torch/torchvision/torchaudio versions actually exist for your target `cuXXX` + Python tag before committing to a plan — don't assume a version exists just because the node's docs mention it.
-
-### The pip footgun that will silently undo your GPU torch install
-
-After manually installing a specific GPU torch build (e.g. `torch==2.10.0+cu130`), running `pip install -r requirements.txt` for ComfyUI itself or any other node can **silently downgrade torch to a CPU-only build** — the requirements file lists torch/torchvision/torchaudio without exact pins, and pip's resolver happily grabs a different (CPU) build from plain PyPI to satisfy the constraint. Nothing errors; you just end up with `torch.cuda.is_available() == False` again with no clear signal why.
-
-**Always reinstall the exact pinned `torch` + `torchvision` + `torchaudio` triple from the matching `--index-url download.pytorch.org/whl/cuXXX`, LAST, after any other requirements.txt installs — then re-verify `torch.cuda.is_available()`.** Don't trust an earlier successful GPU-torch install to still be intact after subsequent pip installs.
-
-## DLL loading failures for compiled CUDA extensions (cumesh, nvdiffrast, o_voxel, flex_gemm, ...)
-
-Precompiled `.pyd` extensions can be built against a *different* CUDA runtime DLL than what your environment otherwise provides (e.g. the extension needs `cudart64_12.dll` even though everything else in the environment is CUDA 13). The symptom is `ImportError: DLL load failed while importing _C`, often rendered as garbled/mojibake text in a non-Japanese-locale terminal — that garbled text is just Windows' localized "指定されたモジュールが見つかりません" (module not found).
-
-Windows has no readily-available `ldd`/`objdump` for this (git-bash's `objdump` is usually missing too). Diagnose properly instead of guessing:
-
-```python
-pip install pefile
-python -c "
-import pefile
-pe = pefile.PE('path/to/extension.pyd')
-for entry in pe.DIRECTORY_ENTRY_IMPORT:
-    print(entry.dll.decode())
-"
-```
-
-This prints the exact DLL dependency list (e.g. reveals `cudart64_12.dll`). Once you know the missing DLL, look for it under an older CUDA Toolkit install that may still be present alongside a newer one (e.g. `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\bin\`), and make Python find it automatically by dropping a **one-line `.pth` file** into the venv's `site-packages` (`.pth` files starting with `import ` execute at interpreter startup, before any user code):
-
-```
-import os; d=r'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\bin'; os.path.isdir(d) and os.add_dll_directory(d)
-```
-
-This is preferable to patching the node's own code, since it survives the node being updated (`git pull`) and applies to every script that uses the venv.
-
-If, after fixing the DLL path, the error changes from "module not found" to "procedure not found" (`ERROR_PROC_NOT_FOUND`), that's a different problem — the DLL now loads but a specific symbol it expects isn't present, usually a torch ABI/version mismatch for that one extension. Before spending time on it, `grep` the node's own `nodes.py` for that extension's import name — if it's never actually used by any node, it's dead weight and safe to ignore.
-
-## Hugging Face downloads: a masked error, and gated models
-
-- **The Xet fast-transfer backend (`hf-xet`) can produce a misleading `OSError: [WinError 123]`** (looks like an invalid-filename/path-length problem, pointing at a `.incomplete` temp file with a garbled-looking name) that is actually hiding a real `403 GatedRepoError` underneath. If a HF download throws WinError 123, don't assume it's a Windows path issue — set `HF_HUB_DISABLE_XET=1` and retry to see the real error.
-- Gated Meta models (e.g. `facebook/dinov3-*`, needed by Trellis2) require the **user themselves** to log into Hugging Face, open the model page, and click through the license/access-request flow — don't attempt this on their behalf, it means agreeing to a license and sharing contact info on their account. In this session, approval came through within minutes; it's worth just having them retry the download rather than assuming a long wait.
-- dinov3 is gated **separately per model size** (`vitb16`, `vitl16`, etc.), but one Meta approval seemed to cover the whole family — an "access granted" email for a different size than you need isn't a sign something's wrong, just retry the actual download.
-- Never go looking for an unofficial mirror of a gated model as a shortcut — that defeats a control the model owner put there on purpose.
 
 ## The ComfyUI-Trellis2 node itself
 
@@ -94,7 +50,7 @@ This machine had no Node/npm/pnpm at all, which blocks this repo's documented as
 
 Workarounds that don't require installing Node.js just for one tool:
 - **gltfpack**: download the standalone Windows binary directly from `github.com/zeux/meshoptimizer/releases` (a small zip) instead of going through `pnpm dlx`.
-- **Serving the static game locally**: `python -m http.server <port>` from whatever Python you set up above works fine — the game (`moonlit-potion-workshop/game/`) is plain static files with no build step.
+- **Serving the static game locally**: `python -m http.server <port>` from whatever Python you set up above works fine — the game (`trellis2_Babylon_moonlight-potion/game/`) is plain static files with no build step.
 
 ### gltfpack settings that hit this project's asset budgets
 
@@ -126,7 +82,7 @@ The working environment lives under `tools/trellis2/` and is fully gitignored (`
 
 ## Committing generated assets back into the game
 
-When a regenerated asset is ready to replace a file under `moonlit-potion-workshop/game/assets/models/`:
+When a regenerated asset is ready to replace a file under `trellis2_Babylon_moonlight-potion/game/assets/models/`:
 1. Back up the original first.
 2. Check the resulting file size against this project's documented budgets in `assets/README.md` before committing.
 3. Stage files explicitly (`git add <file> <file>`), never `git add -A` — this repo's local tooling directories sit right next to the asset folders and a blanket add can easily sweep in gigabytes of unrelated local environment files.

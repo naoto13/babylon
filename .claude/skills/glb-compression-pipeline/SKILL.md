@@ -5,6 +5,10 @@ description: How to compress GLB assets with gltfpack for this repo's Babylon.js
 
 # GLB compression pipeline (gltfpack → Babylon.js)
 
+生成経路（image-to-3D）の現行は **image-to-3d-asset-trellis2** スキル（明示コマンド専用）を参照。本スキルは生成後の圧縮・組み込み工程を扱う。
+
+> 注意: `tools/asset-pipeline/check-glb.mjs` は gltfpack 圧縮後（`EXT_meshopt_compression` 付き）の glb を読めない（`Invalid typed array length` で失敗する。2026-08-16 実測）。健全性チェックは**圧縮前**の glb に対して行い、圧縮後の検証は asset-preview ページで行うこと。
+
 ## Why this exists
 
 Assets in this repo go through `gltfpack` before the game loads them, and that step can change the file in ways the engine silently mishandles. A whole debugging session was lost to this: a hero model that looked correct in Blender and in the asset-preview page rendered as a visibly *different, washed-out model* in-game, with **no console error at all**. The mesh, the bake, and the texture were all fine — the loader was just ignoring a glTF extension. Suspect this pipeline before you suspect the asset.
@@ -32,7 +36,7 @@ import "@babylonjs/loaders/glTF/2.0/Extensions/EXT_texture_webp.js";
 import "@babylonjs/loaders/glTF/2.0/Extensions/KHR_texture_transform.js";
 ```
 
-Both `chrono-arena/src/main.js` and `chrono-arena/tools/asset-preview.js` carry these. If you add another page or project that loads packed GLBs, copy the whole block — don't add extensions one at a time as errors appear, because the silent one never produces an error to prompt you.
+Both `trellis2_Babylon_chrono-arena/src/main.js` and `trellis2_Babylon_chrono-arena/tools/asset-preview.js` carry these. If you add another page or project that loads packed GLBs, copy the whole block — don't add extensions one at a time as errors appear, because the silent one never produces an error to prompt you.
 
 ## Inspect the GLB instead of guessing
 
@@ -61,7 +65,7 @@ The packed file under `assets/production/models/` is a build artifact of a sourc
 When a fix appears not to have taken effect, compare timestamps before re-investigating the fix itself:
 
 ```bash
-ls -la chrono-arena/assets/production/demonic/rigged/hero-nendo-trellis2-animated.glb chrono-arena/assets/production/models/hero-nendo-trellis2.glb
+ls -la trellis2_Babylon_chrono-arena/assets/production/demonic/rigged/hero-nendo-trellis2-animated.glb trellis2_Babylon_chrono-arena/assets/production/models/hero-nendo-trellis2.glb
 ```
 
 If the packed file is older than its source, that's the whole bug. Re-run gltfpack.
@@ -73,15 +77,15 @@ gltfpack.exe -i in.glb -o out.glb -cc -tw -tq 8 -tl 2048 -af 24
 ```
 
 - `-cc` higher meshopt compression · `-tw` WebP textures · `-tq 8` texture quality · `-tl 2048` texture dimension cap · `-af 24` resample animation to 24Hz (matches the scene fps these clips are authored at)
-- Prefer `-tw` over `-tc`/KTX2: `moonlit-potion-workshop/game/assets/README.md` flags KTX2 as adding a decoder dependency, and WebP needs nothing extra in-browser.
-- Add `-si <ratio>` to simplify geometry when a file misses its size budget. Budgets live in `chrono-arena/SPEC.md` §12 (hero ≈3.2MB) and `moonlit-potion-workshop/game/assets/README.md` (cauldron ≤3MB, props ≤1MB).
-- Verify animation clip names survive packing when the game requires specific ones — `chrono-arena/src/main.js`'s `loadModelAssets()` throws if the hero lacks `Idle, Run, Attack, Dash, Hit, FutureSlash`. Use the JSON dump to list `animations[].name`.
+- Prefer `-tw` over `-tc`/KTX2: `trellis2_Babylon_moonlight-potion/game/assets/README.md` flags KTX2 as adding a decoder dependency, and WebP needs nothing extra in-browser.
+- Add `-si <ratio>` to simplify geometry when a file misses its size budget. Budgets live in `trellis2_Babylon_chrono-arena/SPEC.md` §12 (hero ≈3.2MB) and `trellis2_Babylon_moonlight-potion/game/assets/README.md` (cauldron ≤3MB, props ≤1MB).
+- Verify animation clip names survive packing when the game requires specific ones — `trellis2_Babylon_chrono-arena/src/main.js`'s `loadModelAssets()` throws if the hero lacks `Idle, Run, Attack, Dash, Hit, FutureSlash`. Use the JSON dump to list `animations[].name`.
 
 On Windows without Node.js, get the standalone binary from `github.com/zeux/meshoptimizer/releases` (a zip, no npm needed) rather than `pnpm dlx gltfpack`. Check `command -v node` before assuming the documented pnpm commands are available.
 
 ## Validate the packed asset, not just the source
 
-`chrono-arena/tools/asset-preview.html` reproduces the game's real lighting (IBL / ACES / SSAO / GlowLayer) and has a `SET` selector that deliberately includes **`TRELLIS.2 packed (in-game)`** — the exact file the game loads — alongside the uncompressed source. That option exists specifically so a preview/game divergence like the one above gets caught immediately rather than after a round of asset debugging. When you add a new packed asset, add it as a `packedPath` in that page's `models` map too.
+`trellis2_Babylon_chrono-arena/tools/asset-preview.html` reproduces the game's real lighting (IBL / ACES / SSAO / GlowLayer) and has a `SET` selector that deliberately includes **`TRELLIS.2 packed (in-game)`** — the exact file the game loads — alongside the uncompressed source. That option exists specifically so a preview/game divergence like the one above gets caught immediately rather than after a round of asset debugging. When you add a new packed asset, add it as a `packedPath` in that page's `models` map too.
 
 It also has `VIEW` (Front / Game 俯瞰 / Side / Back / Turntable) and `MOTION` (the six clips) selectors, all reflected in the URL:
 

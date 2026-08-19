@@ -24,7 +24,7 @@
 現行の全アセットは `assets/refs/*-ref.png` を入力に、ローカルの TRELLIS.2（ComfyUI, FP8 量子化）で生成しています。
 
 ```sh
-python tools/trellis2/comfy_generate.py --out-dir out --name mortar --image moonlit-potion-workshop/assets/refs/mortar-ref.png
+python tools/trellis2/comfy_generate.py --out-dir out --name mortar --image trellis2_Babylon_moonlight-potion/assets/refs/mortar-ref.png
 python tools/trellis2/pack_for_game.py --src out --install
 ```
 

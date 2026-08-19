@@ -21,7 +21,7 @@ import sys
 
 SP = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(SP, "..", ".."))
-MODELS = os.path.join(REPO, "moonlit-potion-workshop", "game", "assets", "models")
+MODELS = os.path.join(REPO, "trellis2_Babylon_moonlight-potion", "game", "assets", "models")
 GLTFPACK = os.environ.get(
     "GLTFPACK",
     r"C:\Users\yamau\work\babylon\tools\trellis2\downloads\gltfpack\gltfpack.exe")
