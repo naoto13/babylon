@@ -1,6 +1,12 @@
 ---
-name: local-image-to-3d
-description: How to set up, debug, and run local image-to-3D asset generation on this Windows/NVIDIA machine using TRELLIS.2 in ComfyUI, replacing the broken SPAR3D path at tools/spar3d/run-spar3d.sh (hardcoded to macOS/MPS, does not run here). Use this whenever the user asks to set up or fix local 3D generation, mentions SPAR3D/TRELLIS/TRELLIS.2/ComfyUI in the context of this repo, wants to generate or regenerate a game asset (cauldron, props, dress-* items) from a reference image, or hits GPU/CUDA/driver/torch errors while doing AI 3D generation work here. Also consult this before recommending a cloud service (Meshy/Tripo) as the only option — a working local pipeline already exists once set up.
+name: image-to-3d-asset-trellis2
+description: >
+  【明示コマンド専用 — 自動発火しない】/image-to-3d-asset-trellis2 で実行されたときだけ使う。
+  Windows/NVIDIA マシンで TRELLIS.2 (ComfyUI) により参照画像から高品質 glb を生成する経路。
+  セットアップ・CUDA/driver/torch のデバッグ・FP8 モデル・gltfpack 減量までの実測知見を含む。
+  3D生成の話題が出ただけでは発火しない。macOS では /image-to-3d-asset-spar3d を使う。
+disable-model-invocation: true
+argument-hint: '[生成したいアセットの説明 or 参照画像パス]'
 ---
 
 # Local image-to-3D generation (TRELLIS.2 on Windows/NVIDIA)
