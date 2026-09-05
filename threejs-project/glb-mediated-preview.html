@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ink Tide Scout comparison bridge</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        background: #1f1e22;
+        color: #f5f3f2;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #1f1e22;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      #status {
+        position: fixed;
+        z-index: 2;
+        top: 14px;
+        left: 14px;
+        max-width: min(440px, calc(100vw - 28px));
+        padding: 8px 11px;
+        border: 1px solid rgb(255 255 255 / 14%);
+        border-radius: 10px;
+        background: rgb(22 21 25 / 78%);
+        color: #f5f3f2;
+        font-size: 12px;
+        line-height: 1.35;
+        letter-spacing: 0.01em;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        pointer-events: none;
+      }
+
+      #status[data-state="error"] {
+        border-color: rgb(255 104 104 / 52%);
+        color: #ffd6d6;
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        #status { background: #161519; backdrop-filter: none; -webkit-backdrop-filter: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status" role="status" aria-live="polite">比較ブリッジを初期化中…</div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+      import { createInkTideScoutGLBMediatedModel } from '/.img2threejs/ink-tide-scout/glb-mediated/generated/createInkTideScoutGlbMediatedModel.ts';
+
+      const FULL_VERTICAL_SIZE = 1.92;
+      const HEAD_VERTICAL_SIZE = 0.56;
+      const FULL_TARGET_Y = 0.79;
+      const HEAD_TARGET_Y = 1.31;
+      const FULL_DISTANCE = 4.2;
+      const HEAD_DISTANCE = 2.0;
+      const REFERENCE_HEIGHT = 1.5684301853179932;
+      const BEAUTY_BACKGROUND = new THREE.Color('#1f1e22');
+      const status = document.querySelector('#status');
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setPixelRatio(1);
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.prepend(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = BEAUTY_BACKGROUND;
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+
+      const lightRoot = new THREE.Group();
+      lightRoot.name = 'render-profile-v2-lights';
+      const key = new THREE.DirectionalLight('#ffd3bd', 3.0);
+      key.position.set(-3.2, 4.8, 4.0);
+      const fill = new THREE.DirectionalLight('#8cd1ff', 1.6);
+      fill.position.set(3.4, 3.2, 2.5);
+      const rim = new THREE.DirectionalLight('#a6d9ff', 2.2);
+      rim.position.set(0, 4.2, -3.5);
+      const ambient = new THREE.HemisphereLight('#b8c7dc', '#2b2326', 0.55);
+      lightRoot.add(key, fill, rim, ambient);
+      scene.add(lightRoot);
+
+      const procedural = createInkTideScoutGLBMediatedModel({
+        qualityPriority: 'balanced',
+        proceduralTextures: false,
+        textureSize: 256,
+        castShadow: true,
+        receiveShadow: true,
+      });
+      procedural.name = 'procedural-blockout';
+
+      function visibleModelBounds(model) {
+        const bounds = new THREE.Box3().makeEmpty();
+        model.updateMatrixWorld(true);
+        model.traverse((object) => {
+          if (!object.isMesh || !object.visible) return;
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          const hidden = materials.length > 0 && materials.every((material) => (
+            material?.visible === false || material?.opacity === 0
+          ));
+          if (hidden) return;
+          if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+          if (!object.geometry.boundingBox) return;
+          bounds.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
+        });
+        return bounds;
+      }
+
+      function alignProceduralToReferenceHeight(model) {
+        model.updateMatrixWorld(true);
+        const sourceBounds = visibleModelBounds(model);
+        const sourceSize = sourceBounds.getSize(new THREE.Vector3());
+        const uniformScale = REFERENCE_HEIGHT / sourceSize.y;
+        model.scale.setScalar(uniformScale);
+        model.updateMatrixWorld(true);
+        const scaledBounds = visibleModelBounds(model);
+        model.position.y -= scaledBounds.min.y;
+        model.updateMatrixWorld(true);
+        model.userData.glbMediatedAlignment = {
+          policy: 'uniform-height-and-grounding-only',
+          referenceHeight: REFERENCE_HEIGHT,
+          sourceHeight: sourceSize.y,
+          uniformScale,
+          translationY: model.position.y,
+        };
+      }
+
+      alignProceduralToReferenceHeight(procedural);
+      scene.add(procedural);
+
+      let activeModel = procedural;
+      let referenceModel = null;
+      let currentCameraSpec = {
+        id: 'hero',
+        role: 'reference-match',
+        azimuthDegrees: 0,
+        elevationDegrees: 0,
+      };
+      let diagnosticMaterials = [];
+      const originalMaterials = new WeakMap();
+
+      const semanticColors = {
+        face: [255, 0, 0],
+        hair: [255, 128, 0],
+        ears: [255, 255, 0],
+        jacket: [0, 255, 0],
+        shorts: [0, 255, 255],
+        boots: [0, 0, 255],
+        tail: [128, 0, 255],
+        materials: [255, 0, 255],
+      };
+
+      function semanticColor(region) {
+        const [red, green, blue] = semanticColors[region];
+        return new THREE.Color().setRGB(
+          red / 255,
+          green / 255,
+          blue / 255,
+          THREE.LinearSRGBColorSpace,
+        );
+      }
+
+      function updateStatus(message, state = 'ready') {
+        status.textContent = message;
+        status.dataset.state = state;
+      }
+
+      function meshIdentity(mesh) {
+        const names = [];
+        let node = mesh;
+        while (node && node !== activeModel.parent) {
+          if (node.name) names.push(node.name);
+          node = node.parent;
+        }
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const material of materials) {
+          if (material?.name) names.push(material.name);
+          if (material?.userData?.sculptMaterial?.id) names.push(material.userData.sculptMaterial.id);
+        }
+        return names.join(' ').toLowerCase();
+      }
+
+      function semanticRegion(mesh) {
+        const id = meshIdentity(mesh);
+        if (/tail/.test(id)) return 'tail';
+        if (/boot|shoe|foot|feet|sole|toe/.test(id)) return 'boots';
+        if (/short|pant|trouser|cuff-leg/.test(id)) return 'shorts';
+        if (/jacket|sleeve|sailor|collar|inner-top|inner_top|shirt|tunic/.test(id)) return 'jacket';
+        if (/ear/.test(id)) return 'ears';
+        if (/hair|bang|ahoge|side-lock|side_lock/.test(id)) return 'hair';
+        if (/head|face|eye|iris|pupil|mouth|brow|nose/.test(id)) return 'face';
+        return 'materials';
+      }
+
+      function disposeDiagnostics() {
+        for (const material of diagnosticMaterials) material.dispose();
+        diagnosticMaterials = [];
+      }
+
+      function restoreBeautyMaterials() {
+        scene.overrideMaterial = null;
+        activeModel.traverse((object) => {
+          if (!object.isMesh) return;
+          if (originalMaterials.has(object)) object.material = originalMaterials.get(object);
+        });
+        disposeDiagnostics();
+      }
+
+      function rememberMaterial(mesh) {
+        if (!originalMaterials.has(mesh)) originalMaterials.set(mesh, mesh.material);
+      }
+
+      function isIntentionallyHidden(mesh) {
+        const original = originalMaterials.get(mesh) ?? mesh.material;
+        const materials = Array.isArray(original) ? original : [original];
+        return materials.length > 0 && materials.every((material) => (
+          material?.visible === false || material?.opacity === 0
+        ));
+      }
+
+      function setPerMeshMaterial(factory) {
+        scene.overrideMaterial = null;
+        activeModel.traverse((object) => {
+          if (!object.isMesh || !object.visible) return;
+          rememberMaterial(object);
+          if (isIntentionallyHidden(object)) return;
+          const material = factory(object);
+          diagnosticMaterials.push(material);
+          object.material = material;
+        });
+      }
+
+      function setCamera(cameraSpec = {}) {
+        currentCameraSpec = { ...currentCameraSpec, ...cameraSpec };
+        const head = currentCameraSpec.role === 'head-closeup';
+        const verticalSize = head ? HEAD_VERTICAL_SIZE : FULL_VERTICAL_SIZE;
+        const targetY = head ? HEAD_TARGET_Y : FULL_TARGET_Y;
+        const distance = head ? HEAD_DISTANCE : FULL_DISTANCE;
+        const azimuth = THREE.MathUtils.degToRad(currentCameraSpec.azimuthDegrees ?? 0);
+        const elevation = THREE.MathUtils.degToRad(currentCameraSpec.elevationDegrees ?? 0);
+        const horizontalDistance = distance * Math.cos(elevation);
+        camera.position.set(
+          Math.sin(azimuth) * horizontalDistance,
+          targetY + Math.sin(elevation) * distance,
+          Math.cos(azimuth) * horizontalDistance,
+        );
+        camera.up.set(0, 1, 0);
+        camera.lookAt(0, targetY, 0);
+        const aspect = renderer.domElement.width / renderer.domElement.height;
+        camera.left = -verticalSize * aspect * 0.5;
+        camera.right = verticalSize * aspect * 0.5;
+        camera.top = verticalSize * 0.5;
+        camera.bottom = -verticalSize * 0.5;
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+        return { ok: true };
+      }
+
+      function switchActiveModel(model, mode) {
+        restoreBeautyMaterials();
+        procedural.visible = model === procedural;
+        if (referenceModel) referenceModel.visible = model === referenceModel;
+        activeModel = model;
+        setCamera(currentCameraSpec);
+        updateStatus(`${mode} · ${currentCameraSpec.id ?? 'camera'} · beauty`);
+      }
+
+      async function setReferenceMode({ kind, url }) {
+        if (kind !== 'glb' || typeof url !== 'string' || !url) {
+          throw new Error('reference mode requires a browser-visible GLB URL');
+        }
+        if (!referenceModel) {
+          updateStatus('GLB基準物を読込中…');
+          const gltf = await new GLTFLoader().loadAsync(url);
+          referenceModel = gltf.scene;
+          referenceModel.name = 'glb-reference-blockout';
+          referenceModel.visible = false;
+          scene.add(referenceModel);
+        }
+        switchActiveModel(referenceModel, 'reference');
+        return { ok: true };
+      }
+
+      function originalRoughness(mesh) {
+        const original = originalMaterials.get(mesh) ?? mesh.material;
+        const material = Array.isArray(original) ? original[0] : original;
+        return typeof material?.roughness === 'number' ? THREE.MathUtils.clamp(material.roughness, 0, 1) : 0.72;
+      }
+
+      function capturePass({ passId = 'beauty', mode = 'procedural' } = {}) {
+        status.hidden = true;
+        restoreBeautyMaterials();
+        const beautyLike = passId === 'beauty' || passId === 'map-stripped';
+        // r180's WebGLRenderer rejects the empty-string NoColorSpace sentinel.
+        // Linear-sRGB is the supported no-output-transfer-function equivalent here.
+        renderer.outputColorSpace = beautyLike ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+        renderer.toneMapping = beautyLike ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+        scene.background = beautyLike ? BEAUTY_BACKGROUND : new THREE.Color(0x000000);
+
+        if (passId === 'alpha-silhouette') {
+          setPerMeshMaterial(() => new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            side: THREE.DoubleSide,
+          }));
+        } else if (passId === 'semantic-id') {
+          setPerMeshMaterial((mesh) => new THREE.MeshBasicMaterial({
+            color: semanticColor(semanticRegion(mesh)),
+            side: THREE.DoubleSide,
+          }));
+        } else if (passId === 'depth') {
+          setPerMeshMaterial(() => new THREE.MeshDepthMaterial({
+            depthPacking: THREE.BasicDepthPacking,
+          }));
+        } else if (passId === 'normal') {
+          setPerMeshMaterial(() => new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }));
+        } else if (passId === 'roughness-material-id') {
+          setPerMeshMaterial((mesh) => {
+            rememberMaterial(mesh);
+            const regionColor = semanticColor(semanticRegion(mesh));
+            const roughness = originalRoughness(mesh);
+            return new THREE.MeshBasicMaterial({
+              color: new THREE.Color(roughness, regionColor.g, regionColor.b),
+              side: THREE.DoubleSide,
+            });
+          });
+        } else if (passId === 'map-stripped') {
+          setPerMeshMaterial(() => new THREE.MeshStandardMaterial({
+            color: '#b8bec8',
+            roughness: 0.92,
+            metalness: 0,
+            side: THREE.DoubleSide,
+          }));
+        } else if (passId !== 'beauty') {
+          return { ok: false, reason: `unsupported pass: ${passId}` };
+        }
+
+        lightRoot.visible = beautyLike;
+        renderer.render(scene, camera);
+        updateStatus(`${mode} · ${currentCameraSpec.id ?? 'camera'} · ${passId}`);
+        return { ok: true, selector: 'canvas' };
+      }
+
+      function modelStats(model) {
+        let meshes = 0;
+        let triangles = 0;
+        const components = [];
+        model.updateMatrixWorld(true);
+        model.traverse((object) => {
+          if (!object.isMesh) return;
+          meshes += 1;
+          const geometry = object.geometry;
+          triangles += (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          const hidden = materials.length > 0 && materials.every((material) => (
+            material?.visible === false || material?.opacity === 0
+          ));
+          if (object.visible && !hidden) {
+            const bounds = new THREE.Box3().setFromObject(object);
+            components.push({
+              name: object.name,
+              min: bounds.min.toArray(),
+              max: bounds.max.toArray(),
+              size: bounds.getSize(new THREE.Vector3()).toArray(),
+              material: Array.isArray(object.material)
+                ? object.material.map((material) => material.name)
+                : object.material?.name,
+            });
+          }
+        });
+        const bounds = visibleModelBounds(model);
+        return {
+          meshes,
+          triangles,
+          min: bounds.min.toArray(),
+          max: bounds.max.toArray(),
+          size: bounds.getSize(new THREE.Vector3()).toArray(),
+          alignment: model.userData.glbMediatedAlignment ?? null,
+          components,
+        };
+      }
+
+      window.__IMG2THREEJS_CAPTURE__ = {
+        setCamera,
+        setReferenceMode,
+        capturePass,
+        stats: () => ({
+          active: activeModel.name,
+          procedural: modelStats(procedural),
+          reference: referenceModel ? modelStats(referenceModel) : null,
+        }),
+      };
+
+      window.addEventListener('resize', () => {
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+        setCamera(currentCameraSpec);
+      });
+
+      try {
+        setCamera(currentCameraSpec);
+        window.__IMG2THREEJS_READY__ = true;
+        updateStatus('procedural · hero · beauty');
+        document.title = 'img2threejs-glb-mediated-ready';
+      } catch (error) {
+        console.error(error);
+        updateStatus(error instanceof Error ? error.message : String(error), 'error');
+        window.__IMG2THREEJS_READY__ = false;
+      }
+    </script>
+  </body>
+</html>

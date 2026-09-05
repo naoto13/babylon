@@ -1,0 +1,324 @@
+/* Ink Survivors — HUD styling
+   apple-design: system font, translucent materials, tabular numerals,
+   spring-like card entrance, reduced-motion fallback */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font: 100%/1.5 system-ui, -apple-system, sans-serif;
+  background: #bfeaf2;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* id セレクタの display 指定は UA の [hidden]{display:none} を詳細度で上書きして
+   しまい、非エラー時も全画面を不透明に覆う。hidden 時は必ず消す */
+#fatal[hidden] {
+  display: none;
+}
+
+#fatal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+  color: #223038;
+  background: #f4f1ea;
+  font-size: 0.95rem;
+}
+
+#hud-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- top HUD ---- */
+
+.hud {
+  position: absolute;
+  top: max(0.6rem, env(safe-area-inset-top));
+  left: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.hud-left {
+  flex: 1 1 auto;
+  max-width: 15rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.bar {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.bar.xp {
+  height: 0.35rem;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: #2ecf8a;
+  transition: width 180ms ease-out;
+}
+
+.bar.hp .bar-fill.low {
+  background: #ff5d5d;
+}
+
+.bar.xp .bar-fill {
+  background: #19d3dc;
+}
+
+.hud-right {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #223038;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chip.level {
+  background: rgba(25, 211, 220, 0.35);
+}
+
+/* ---- overlay (level up / game over) ---- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(20, 32, 40, 0);
+  transition: background 240ms ease;
+  pointer-events: auto;
+}
+
+.overlay.shown {
+  background: rgba(20, 32, 40, 0.35);
+}
+
+.panel {
+  width: min(22rem, 92vw);
+  padding: 1.4rem 1.25rem 1.25rem;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 18px 50px rgba(20, 32, 40, 0.25);
+  color: #223038;
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  transition:
+    opacity 260ms ease,
+    transform 340ms cubic-bezier(0.22, 1.3, 0.36, 1);
+}
+
+.overlay.shown .panel {
+  opacity: 1;
+  transform: none;
+}
+
+.panel-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #0fb8c9;
+}
+
+.panel-title {
+  font-size: 1.35rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  margin: 0.2rem 0 1rem;
+}
+
+.cards {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(34, 48, 56, 0.1);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 240ms ease,
+    transform 320ms cubic-bezier(0.22, 1.3, 0.36, 1),
+    box-shadow 160ms ease;
+  transition-delay: calc(var(--stagger, 0) * 55ms);
+}
+
+.overlay.shown .card {
+  opacity: 1;
+  transform: none;
+}
+
+.card:hover {
+  box-shadow: 0 6px 18px rgba(15, 184, 201, 0.25);
+}
+
+.card:active {
+  transform: scale(0.97);
+  transition: transform 90ms ease-out;
+}
+
+.card-icon {
+  font-size: 1.5rem;
+}
+
+.card-body {
+  flex: 1;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.card-desc {
+  font-size: 0.78rem;
+  color: rgba(34, 48, 56, 0.7);
+}
+
+.card-key {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(34, 48, 56, 0.45);
+  border: 1px solid rgba(34, 48, 56, 0.2);
+  border-radius: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- game over ---- */
+
+.results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.results dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(34, 48, 56, 0.55);
+}
+
+.results dd {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.restart {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.9rem;
+  background: #19d3dc;
+  color: #063a3f;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 90ms ease-out, filter 160ms ease;
+}
+
+.restart:hover {
+  filter: brightness(1.06);
+}
+
+.restart:active {
+  transform: scale(0.97);
+}
+
+/* ---- accessibility ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .card {
+    transition: opacity 200ms ease;
+    transform: none !important;
+  }
+
+  .bar-fill {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .bar,
+  .chip,
+  .panel {
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
