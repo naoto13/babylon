@@ -212,7 +212,7 @@ export class Game implements UpgradeCtx {
       } else if (src === 'procedural') {
         // 手続きモデルは正規化済み（接地/+Z正面）: rotX/rotY/offsetY 補正は掛けない。
         // +Z 正面 → ゲーム規約の -Z 前方への 180° はエンジン側でベイクする（cfg 非依存）
-        const obj = rotatedObject(PROC_BUILDERS.player!(), 0);
+        const obj = rotatedObject(PROC_BUILDERS.player!(), 0, false);
         obj.rotation.y = Math.PI;
         this.player.setModel(obj, 'scale-only');
       } else {

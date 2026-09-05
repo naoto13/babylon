@@ -2,10 +2,10 @@
 // アセットに builder があるものだけ 'procedural' ソースを選択できる。
 import type * as THREE from 'three';
 import type { AssetKey } from '../asset-config';
-import { createPlayerSquidProcModel } from './playerSquidProc';
+import { createInkTideScoutProcModel } from './inkTideScoutProc';
 
 export const PROC_BUILDERS: Partial<Record<AssetKey, () => THREE.Group>> = {
-  player: createPlayerSquidProcModel,
+  player: createInkTideScoutProcModel,
 };
 
 export function hasProcModel(key: AssetKey): boolean {

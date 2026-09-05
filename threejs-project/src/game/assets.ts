@@ -97,10 +97,11 @@ export function rotatedGeometry(base: THREE.BufferGeometry, rotXdeg: number): TH
 
 /**
  * 正規化済み Object3D を rotX（度）で起こし、回転後 bbox で接地・高さ1 に再正規化した
- * ラッパーを返す。source は clone するので LoadedModel 本体は汚染しない。
+ * ラッパーを返す。既定では source を clone して LoadedModel 本体を汚染しない。
+ * factory が返した専有インスタンスは cloneSource=false で live runtime を保持できる。
  */
-export function rotatedObject(source: THREE.Object3D, rotXdeg: number): THREE.Group {
-  const obj = source.clone(true);
+export function rotatedObject(source: THREE.Object3D, rotXdeg: number, cloneSource = true): THREE.Group {
+  const obj = cloneSource ? source.clone(true) : source;
   const pivot = new THREE.Group();
   pivot.add(obj);
   pivot.rotation.x = (rotXdeg * Math.PI) / 180;
@@ -116,7 +117,56 @@ export function rotatedObject(source: THREE.Object3D, rotXdeg: number): THREE.Gr
     pivot.position.set(-center.x, -box.min.y, -center.z);
     if (size.y > 1e-6) root.scale.setScalar(1 / size.y);
   }
+  // cloneSource=false transfers an immutable factory-owned instance. Capture the exact resources
+  // now instead of later inferring ownership from whatever happens to be attached to the subtree.
+  // This keeps subsequently attached shared GLB nodes outside the disposal boundary.
+  if (!cloneSource) {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    root.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.geometry) geometries.add(mesh.geometry);
+      const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const meshMaterial of meshMaterials) {
+        if (meshMaterial) materials.add(meshMaterial);
+      }
+    });
+    root.userData.ownsResources = true;
+    Object.defineProperty(root.userData, 'ownedResourceSnapshot', {
+      value: { geometries, materials },
+      enumerable: false,
+      configurable: false,
+    });
+  }
   return root;
+}
+
+interface OwnedResourceSnapshot {
+  geometries: Set<THREE.BufferGeometry>;
+  materials: Set<THREE.Material>;
+}
+
+/** Dispose only resources captured for factory-owned objects. Shared GLB clones are no-op. */
+export function disposeOwnedObjectResources(root: THREE.Object3D): void {
+  const snapshots: OwnedResourceSnapshot[] = [];
+  root.traverse((node) => {
+    if (node.userData.ownsResources === true && node.userData.resourcesDisposed !== true) {
+      const snapshot = node.userData.ownedResourceSnapshot as OwnedResourceSnapshot | undefined;
+      if (snapshot) snapshots.push(snapshot);
+      node.userData.resourcesDisposed = true;
+    }
+  });
+  if (snapshots.length === 0) return;
+
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  for (const snapshot of snapshots) {
+    for (const geometry of snapshot.geometries) geometries.add(geometry);
+    for (const ownedMaterial of snapshot.materials) materials.add(ownedMaterial);
+  }
+  for (const geometry of geometries) geometry.dispose();
+  for (const ownedMaterial of materials) ownedMaterial.dispose();
 }
 
 export type LoadedModels = Partial<Record<AssetKey, LoadedModel>>;

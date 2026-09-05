@@ -38,13 +38,15 @@ python3 tools/serve.py 4173  # no-cache ヘッダー付き（JS/アセット差�
 
 ## アセット生成パイプライン
 
-3Dアセットの作り方はスキルとして同梱しています。生成経路は二本立てです。
+3Dアセットの作り方はスキルとして同梱しています。生成経路は、GLB生成とprocedural factoryの2系統です。
 
-生成経路のスキルは3本あり、いずれも**明示コマンド専用**（3Dの話題だけでは自動発火しない）です。
+実装スキルはGLB生成2本とprocedural factory 1本の計3本で、いずれも**明示コマンド専用**（3Dの話題だけでは自動発火しない）です。
 
 - `.claude/skills/image-to-3d-asset-trellis2/`: **現行既定**。専用 Windows/NVIDIA 機で TRELLIS.2（ComfyUI）を回して glb を生成する経路
 - `.claude/skills/image-to-3d-asset-spar3d/`: Mac（Apple Silicon/MPS）の SPAR3D 経路。品質は TRELLIS.2 に劣るが Mac 内で完結する（参照画像の定型・検証・減量の詳細は `references/pipeline-details.md`）
 - `.claude/skills/image-to-3d-asset-threejs/`: 参照画像からコードで手続きモデリングする経路（glb を作らない第2経路）
+
+img2threejsの公式showcase、コミュニティ実験、Ink Tide Scoutでの実測を踏まえた用途境界と現行判断は[`docs/img2threejs-usage-findings.md`](docs/img2threejs-usage-findings.md)を参照してください。高忠実度の有機キャラクター本体には採用せず、hard-surface小物、procedural variant、runtime構造・検証補助へ限定します。
 
 横断知見は自動発火スキルとして `glb-compression-pipeline`（gltfpack の罠）・`windows-cuda-debug`（CUDA/torch 環境デバッグ）・`asset-pipeline-history`（知見集約の運用）にあります。共通スクリプトは `tools/asset-pipeline/` に集約しています。
 

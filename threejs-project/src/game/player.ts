@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { PLAYER } from './config';
 import { buildPlayerFallback } from './fallback-models';
+import { disposeOwnedObjectResources } from './assets';
 
 const PLAYER_GLB_HEIGHT = 1.1; // scale=1 の glb の目標高さ（プリミティブと釣り合う値）
 
@@ -33,6 +34,7 @@ export class Player {
   /** モデルへ差し替え（null でプリミティブに戻す）。mode='scale-only' は正規化済みモデル用 */
   setModel(object: THREE.Object3D | null, mode: TuningMode = 'full'): void {
     if (this.modelWrapper) {
+      disposeOwnedObjectResources(this.modelWrapper);
       this.group.remove(this.modelWrapper);
       this.modelWrapper = null;
     }

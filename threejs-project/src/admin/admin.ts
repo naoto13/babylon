@@ -11,7 +11,7 @@ import {
   exportConfigJson,
   type AssetConfig, type AssetKey, type AssetSource, type ParamMeta,
 } from '../game/asset-config';
-import { loadModel, rotatedObject, type LoadedModel } from '../game/assets';
+import { disposeOwnedObjectResources, loadModel, rotatedObject, type LoadedModel } from '../game/assets';
 import { buildFallbackModel } from '../game/fallback-models';
 import { PROC_BUILDERS, hasProcModel } from '../game/procedural';
 import { ENEMY_TYPES } from '../game/config';
@@ -95,7 +95,7 @@ async function buildSourceObject(key: AssetKey, source: AssetSource, cfg: AssetC
     gameYaw = cfg.assets[key].rotY * DEG2RAD;
   } else if (source === 'procedural') {
     const builder = PROC_BUILDERS[key];
-    obj = builder ? rotatedObject(builder(), 0) : null;
+    obj = builder ? rotatedObject(builder(), 0, false) : null;
     gameYaw = Math.PI; // +Z 正面 → -Z 前方の規約変換（エンジン側ベイクと同じ）
   } else {
     obj = rotatedObject(buildFallbackModel(key), 0);
@@ -134,6 +134,7 @@ class MiniViews {
   }
 
   register(id: string, target: HTMLCanvasElement): void {
+    this.remove(id);
     const ctx = target.getContext('2d');
     if (!ctx) return;
     const scene = new THREE.Scene();
@@ -152,13 +153,22 @@ class MiniViews {
 
   setObject(id: string, obj: THREE.Object3D | null): void {
     const v = this.views.get(id);
-    if (!v) return;
+    if (!v) {
+      if (obj) disposeOwnedObjectResources(obj);
+      return;
+    }
+    for (const child of v.root.children) disposeOwnedObjectResources(child);
     v.root.clear();
     if (obj) v.root.add(obj);
     this.renderView(v); // 即時反映（rAF 停止環境でも 1 フレーム描く）
   }
 
   remove(id: string): void {
+    const v = this.views.get(id);
+    if (v) {
+      for (const child of v.root.children) disposeOwnedObjectResources(child);
+      v.root.clear();
+    }
     this.views.delete(id);
   }
 
@@ -275,7 +285,7 @@ class Preview {
 
     if (want === 'procedural' && hasProcModel(key)) {
       this.currentModel = null;
-      const obj = rotatedObject(PROC_BUILDERS[key]!(), 0);
+      const obj = rotatedObject(PROC_BUILDERS[key]!(), 0, false);
       obj.rotation.y = Math.PI; // ゲームと同じ規約変換（+Z 正面 → -Z 前方）
       this.setObject(obj, 'procedural', cfg);
       return;
@@ -291,6 +301,7 @@ class Preview {
   }
 
   private setObject(obj: THREE.Object3D, kind: AssetSource, cfg: AssetConfig): void {
+    for (const child of this.wrapper.children) disposeOwnedObjectResources(child);
     this.wrapper.clear();
     this.wrapper.add(obj);
     this.sourceKind = kind;
@@ -307,6 +318,7 @@ class Preview {
     const isGlb = this.sourceKind === 'glb';
     if (isGlb && this.currentModel && t.rotX !== this.lastRotX) {
       this.lastRotX = t.rotX;
+      for (const child of this.wrapper.children) disposeOwnedObjectResources(child);
       this.wrapper.clear();
       this.wrapper.add(rotatedObject(this.currentModel.object, t.rotX));
     }
@@ -455,7 +467,10 @@ async function init(): Promise<void> {
     c.badge.textContent = SOURCE_LABELS[effective];
     c.badge.className = `src-badge ${effective}`;
     const obj = await buildSourceObject(key, effective, cfg);
-    if (cardSeq.get(key) !== seq) return;
+    if (cardSeq.get(key) !== seq) {
+      if (obj) disposeOwnedObjectResources(obj);
+      return;
+    }
     mini.setObject(`card:${key}`, obj);
     // メタ: glb 基準（無ければ実効ソースの頂点数のみ）
     const sizeKB = await fetchGlbSizeKB(cfg.assets[key].file);
@@ -566,6 +581,9 @@ async function init(): Promise<void> {
   async function rebuildCompare(): Promise<void> {
     const seq = ++compareSeq;
     const key = selected; // await 中に selected が変わっても、このビルドは開始時点のアセットに固定
+    for (const def of TILE_DEFS) {
+      if (def.source !== 'ref') mini.remove(`tile:${def.source}`);
+    }
     compareRow.textContent = '';
     const model = await cachedLoadModel(cfg.assets[key].file);
     if (seq !== compareSeq) return; // 新しいビルドが走り出していたら破棄
@@ -593,7 +611,10 @@ async function init(): Promise<void> {
         const id = `tile:${def.source}`;
         mini.register(id, canvas);
         const obj = await buildSourceObject(key, def.source, cfg);
-        if (seq !== compareSeq) return;
+        if (seq !== compareSeq) {
+          if (obj) disposeOwnedObjectResources(obj);
+          return;
+        }
         mini.setObject(id, obj);
         if (def.source === 'glb' && !model) {
           tile.classList.add('unavailable');
